@@ -50,6 +50,15 @@ THE SOFTWARE.
 	#pragma comment(lib, "SDLmain.lib")
 #endif
 
+
+// Video: Offset of display on the emulator's surface
+// Syncronized with the kernel, this value now results in the image
+// being perfectly centered in both the emulator and a real TV
+#define VIDEO_LEFT_EDGE  166U
+// Video: Display width; the width of the emulator's output (before any
+// scaling applied) and video capturing
+#define VIDEO_DISP_WIDTH 618U
+
 //Uzebox keyboard defines
 #define KB_STOP		0
 #define KB_TX_START 1
@@ -403,13 +412,13 @@ struct avr8
 	SDL_Texture *texture;
 	int sdl_flags;
 	int scanline_count;
-	int current_cycle;
+	unsigned int current_cycle;
 	int scanline_top;
-	int left_edge;
+	unsigned int left_edge;
 	u32 inset;
-	u32 *current_scanline, *prev_scanline;
-	u32 pixel;
 	u32 palette[256];
+	u8  scanline_buf[2048]; // For collecting pixels from a single scanline
+	u8  pixel_raw;          // Raw (8 bit) input pixel
 	bool fullscreen;
 
 	/*Audio*/

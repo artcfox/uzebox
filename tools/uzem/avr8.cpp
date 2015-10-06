@@ -264,13 +264,44 @@ void avr8::spi_calculateClock(){
 }
 
 
+// Renders a line into a 32 bit output buffer.
+// Performs a shrink by 2,33
+static void render_line(u32* dest, u8 const* src, u32 const* pal)
+{
+	unsigned int sp;
+	unsigned int dp;
+
+	// Note: This function relies on the destination using a 8 bits per
+	// channel representation, but the channel order is irrelevant.
+
+	for (dp = 0U; dp < ((VIDEO_DISP_WIDTH / 3U) * 3U); dp += 3U)
+	{
+		// Shrink roughly does this:
+		// Source:      |----|----|----|----|----|----|----| (7px)
+		// Destination: |-----------|----------|-----------| (3px)
+		dest[dp + 0U] =
+			(((pal[src[sp + 0U]] & 0xF8F8F8F8U) >> 3) * 3U) +
+			(((pal[src[sp + 1U]] & 0xF8F8F8F8U) >> 3) * 3U) +
+			(((pal[src[sp + 2U]] & 0xFCFCFCFCU) >> 2)     );
+		dest[dp + 1U] =
+			(((pal[src[sp + 2U]] & 0xF8FCFCFCU) >> 2)     ) +
+			(((pal[src[sp + 3U]] & 0xFEFEFEFEU) >> 1)     ) +
+			(((pal[src[sp + 4U]] & 0xFCFCFCFCU) >> 2)     );
+		dest[dp + 2U] =
+			(((pal[src[sp + 4U]] & 0xFCFCFCFCU) >> 2)     ) +
+			(((pal[src[sp + 5U]] & 0xF8F8F8F8U) >> 3) * 3U) +
+			(((pal[src[sp + 6U]] & 0xF8F8F8F8U) >> 3) * 3U);
+		sp += 7U;
+	}
+}
+
 inline void avr8::write_io(u8 addr,u8 value)
 {
 	// Pixel output ideally should inline, it is performed about 2 - 3
 	// million times per second in a Uzebox game.
 	if (addr == ports::PORTC)
 	{
-		pixel = palette[value & DDRC];
+		pixel_raw = value & DDRC;
 	}
 	else
 	{
@@ -323,60 +354,19 @@ void avr8::write_io_x(u8 addr,u8 value)
 			if (scanline_count == -999 && elapsedCycles >= HSYNC_HALF_PERIOD -10 && elapsedCycles <= HSYNC_HALF_PERIOD + 10)
 			{
 			   scanline_count = scanline_top;
-			   prev_scanline = NULL;
 			}
 			else if (scanline_count != -999)
 			{
-				scanline_count++;
 
-				if(scanline_count >= 0){
-
-					current_cycle = left_edge;
-					current_scanline = (u32*)((u8*)surface->pixels + scanline_count * surface->pitch);
-
-
-
-					/*
-					if(hsyncHelp){
-						if(prev_scanline!=NULL && elapsedCycles > HSYNC_PERIOD){
-
-							for(u8 x=0;x<(elapsedCycles-HSYNC_PERIOD);x++){
-								prev_scanline[(x*5)+5] = hsync_more_col;
-								prev_scanline[(x*5)+6] = hsync_more_col;
-								prev_scanline[(x*5)+7] = hsync_more_col;
-								prev_scanline[(x*5)+8] = 0;
-								prev_scanline[(x*5)+9] = 0;
-
-								prev_scanline[(x*5)+5+(screen->pitch>>2)] = hsync_more_col;
-								prev_scanline[(x*5)+6+(screen->pitch>>2)] = hsync_more_col;
-								prev_scanline[(x*5)+7+(screen->pitch>>2)] = hsync_more_col;
-								prev_scanline[(x*5)+8+(screen->pitch>>2)] = 0;
-								prev_scanline[(x*5)+9+(screen->pitch>>2)] = 0;
-							}
-
-						}else if(prev_scanline!=NULL && elapsedCycles < HSYNC_PERIOD){
-							for(u8 x=0;x<(HSYNC_PERIOD-elapsedCycles);x++){
-								prev_scanline[(x*5)+5] = hsync_less_col;
-								prev_scanline[(x*5)+6] = hsync_less_col;
-								prev_scanline[(x*5)+7] = hsync_less_col;
-								prev_scanline[(x*5)+8] = 0;
-								prev_scanline[(x*5)+9] = 0;
-
-								prev_scanline[(x*5)+5+(screen->pitch>>2)] = hsync_less_col;
-								prev_scanline[(x*5)+6+(screen->pitch>>2)] = hsync_less_col;
-								prev_scanline[(x*5)+7+(screen->pitch>>2)] = hsync_less_col;
-								prev_scanline[(x*5)+8+(screen->pitch>>2)] = 0;
-								prev_scanline[(x*5)+9+(screen->pitch>>2)] = 0;
-							}
-						}
-
-						current_cycle += (elapsedCycles - HSYNC_PERIOD); //to simulate line offsync
-					}
-*/
-					prev_scanline = current_scanline;
-
+				if (scanline_count >= 0U){
+					render_line(
+						(u32*)((u8*)surface->pixels + scanline_count * surface->pitch),
+						&scanline_buf[left_edge],
+						palette);
 				}
 
+				scanline_count ++;
+				current_cycle = 0U;
 
 				if (scanline_count == 224)
 				{
@@ -387,7 +377,7 @@ void avr8::write_io_x(u8 addr,u8 value)
 					SDL_RenderPresent(renderer);
 
 					//Send video frame to ffmpeg
-					if (recordMovie && avconv_video) fwrite(surface->pixels, 720*224*4, 1, avconv_video);
+					if (recordMovie && avconv_video) fwrite(surface->pixels, VIDEO_DISP_WIDTH*224*4, 1, avconv_video);
 
 					SDL_Event event;
 					while (singleStep? SDL_WaitEvent(&event) : SDL_PollEvent(&event))
@@ -912,18 +902,13 @@ void avr8::update_hardware(int cycles)
 	}
 
 
-    //draw pixels on scanline
-	if (scanline_count >= 0 && current_cycle < 1440)
+	// Draw pixels in the line buffer
+
+	while (cycles != 0U)
 	{
-		while (cycles)
-		{
-			if (current_cycle >= 0 && current_cycle < 1440)
-			{
-				current_scanline[current_cycle>>1] = pixel;
-			}
-			current_cycle++;
-			--cycles;
-		}
+		scanline_buf[current_cycle & 0x7FFU] = pixel_raw;
+		current_cycle ++;
+		cycles --;
 	}
 
 
@@ -1847,7 +1832,7 @@ bool avr8::init_gui()
 	atexit(SDL_Quit);
 	init_joysticks();
 
-	window = SDL_CreateWindow(caption,SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,630,448,fullscreen?SDL_WINDOW_FULLSCREEN_DESKTOP:SDL_WINDOW_RESIZABLE);
+	window = SDL_CreateWindow(caption,SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,VIDEO_DISP_WIDTH,448,fullscreen?SDL_WINDOW_FULLSCREEN_DESKTOP:SDL_WINDOW_RESIZABLE);
 	if (!window){
 		fprintf(stderr, "CreateWindow failed: %s\n", SDL_GetError());
 		return false;
@@ -1859,9 +1844,9 @@ bool avr8::init_gui()
 		return false;
 	}
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
-	SDL_RenderSetLogicalSize(renderer, 630, 448);
+	SDL_RenderSetLogicalSize(renderer, VIDEO_DISP_WIDTH, 448);
 
-	surface = SDL_CreateRGBSurface(0, 720, 224, 32, 0,0,0,0);
+	surface = SDL_CreateRGBSurface(0, VIDEO_DISP_WIDTH, 224, 32, 0,0,0,0);
 	if(!surface){
 		fprintf(stderr, "CreateRGBSurface failed: %s\n", SDL_GetError());
 		return false;
@@ -1905,12 +1890,12 @@ bool avr8::init_gui()
 			SDL_PauseAudio(0);
 	}
 
-	current_cycle = -999999;
+	current_cycle = 0U;
 	scanline_top = -33-5;
 	scanline_count = -999;
 	//Syncronized with the kernel, this value now results in the image 
 	//being perfectly centered in both the emulator and a real TV
-	left_edge = -166;
+	left_edge = VIDEO_LEFT_EDGE;
 
 	latched_buttons[0] = buttons[0] = ~0;
 	latched_buttons[1] = buttons[1] = ~0;
@@ -1954,7 +1939,7 @@ bool avr8::init_gui()
 			}
 			printf("Pixel Format = %s\n", pix_fmt);
 			char avconv_video_cmd[1024] = {0};
-			snprintf(avconv_video_cmd, sizeof(avconv_video_cmd) - 1, "ffmpeg -y -f rawvideo -s 720x224 -pix_fmt %s -r 59.94 -i - -vf scale=960:720 -sws_flags neighbor -an -b:v 1000k uzemtemp.mp4", pix_fmt);
+			snprintf(avconv_video_cmd, sizeof(avconv_video_cmd) - 1, "ffmpeg -y -f rawvideo -s %ux224 -pix_fmt %s -r 59.94 -i - -vf scale=960:720 -sws_flags neighbor -an -b:v 1000k uzemtemp.mp4", VIDEO_DISP_WIDTH, pix_fmt);
 			avconv_video = popen(avconv_video_cmd, "w");
 		}
 		if (avconv_video == NULL){
@@ -2011,8 +1996,8 @@ void avr8::handle_key_down(SDL_Event &ev)
 			// SDLK_LEFT/RIGHT/UP/DOWN
 			// SDLK_abcd...
 			// SDLK_RETURN...
-			case SDLK_1: left_edge--; printf("left=%d\n",left_edge); break;
-			case SDLK_2: left_edge++; printf("left=%d\n",left_edge); break;
+			case SDLK_1: if (left_edge > 0U){ left_edge--; } printf("left=%d\n",left_edge); break;
+			case SDLK_2: if (left_edge < 2047U - ((VIDEO_DISP_WIDTH * 7U) / 3U)){ left_edge++; } printf("left=%d\n",left_edge); break;
 			case SDLK_3: scanline_top--; printf("top=%d\n",scanline_top); break;
 			case SDLK_4: scanline_top++; printf("top=%d\n",scanline_top); break;
 			case SDLK_5: 
