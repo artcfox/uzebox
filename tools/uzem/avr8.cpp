@@ -358,15 +358,7 @@ void avr8::write_io_x(u8 addr,u8 value)
 			else if (scanline_count != -999)
 			{
 
-				// TODO: scanline_count should never be >= 224
-				// at this point, yet it seemingly can happen!
-				// Looks like there are bugs somewhere in the
-				// initialization of the emu! (This seems to
-				// be possible to get called before init_gui
-				// which is supposed to initialize)
-
-				if ( (scanline_count >= 0U) &&
-				     (scanline_count < 224U) ){
+				if (scanline_count >= 0){
 					render_line(
 						(u32*)((u8*)surface->pixels + scanline_count * surface->pitch),
 						&scanline_buf[left_edge],
