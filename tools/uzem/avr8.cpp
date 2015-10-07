@@ -630,7 +630,7 @@ void avr8::write_io_x(u8 addr,u8 value)
 		}
 		if(value & EEMPE){
 			io[addr] = value;
-			eeClock = 4;
+			// eeClock = 4; TODO: This was only set here, never used. Maybe a never completed EEPROM timing code.
 		}
 		else{
 			io[addr] = value;
@@ -698,41 +698,55 @@ u8 avr8::read_io(u8 addr)
 }
 
 
-void avr8::update_hardware(int cycles)
+void avr8::update_hardware(unsigned int cycles)
 {
 
-	cycleCounter += cycles;
-	watchdogTimer += cycles;
 
-	if (TCCR1B & 7)	//if timer 1 is started
+	// TODO (noted by Jubatian)
+	//
+	// Some register updates are delayed, as described so their effect is
+	// carried out after the instruction. This, as of now, especially with
+	// calling update_hardware from within the instruction decoder got
+	// murky. It should be verified whether these delays aren't in fact
+	// for delaying the effect by one cycle, and if so, should be fixed
+	// accordingly. Cleaning this up might allow decoupling interrupt
+	// processing, so it can be moved after the instruction decoder
+	// proper.
+	//
+	// SPI's interrupt also should be moved in the by-priority processing
+	// block.
+
+	cycleCounter += cycles;
+
+	tempTIFR1 = TIFR1;
+
+	// timer1_next stores the cycles remaining until the next event on the
+	// Timer1 16 bit timer. It can be cleared to zero whenever the timer's
+	// state is changed (port writes). Locking it to zero should have no
+	// effect, causing the timer to re-calculate its state proper on every
+	// update_hardware call. It should only improve performance.
+
+	if (timer1_next <= cycles)
 	{
 
-		TCNT1 = TCNT1L | (TCNT1H<<8);
-		tempTIFR1 = TIFR1;
+		if ((TCCR1B & 7U) != 0U) //if timer 1 is started
+		{
 
-		// timer1_next stores the cycles remaining until the next
-		// event on the Timer1 16 bit timer. It can be cleared to zero
-		// whenever the timer's state is changed (port writes).
-		// Locking it to zero should have no effect, causing the timer
-		// to re-calculate its state proper on every update_hardware
-		// call. It should only improve performance.
-
-		if (timer1_next <= cycles){
-
-			OCR1A = OCR1AL | (OCR1AH<<8);
-			OCR1B = OCR1BL | (OCR1BH<<8);
+			unsigned int TCNT1 = TCNT1L | ((unsigned int)(TCNT1H) << 8);
+			unsigned int OCR1A = OCR1AL | ((unsigned int)(OCR1AH) << 8);
+			unsigned int OCR1B = OCR1BL | ((unsigned int)(OCR1BH) << 8);
 
 			if(TCCR1B & WGM12){ //timer in CTC mode: count up to OCRnA then resets to zero
 
-				if (TCNT1 > (0xFFFF - cycles)){
+				if (TCNT1 > (0xFFFFU - cycles)){
 
 					 TIFR1|=TOV1; //overflow interrupt
 
 				}
 
 				if (TCNT1 <= OCR1B && (TCNT1 + cycles) > OCR1B){
-					u16 tmp=TCNT1;
-					tmp-=(OCR1B - cycles + 1);
+					unsigned int tmp = TCNT1;
+					tmp -= (OCR1B - cycles + 1U);
 
 					if(tmp==0){
 						tempTIFR1|=OCF1B; //CTC match flag interrupt
@@ -754,7 +768,7 @@ void avr8::update_hardware(int cycles)
 					}
 
 				}else{
-					TCNT1 += cycles;
+					TCNT1 = (TCNT1 + cycles) & 0xFFFFU;
 				}
 
 				// Calculate next timer event
@@ -773,12 +787,12 @@ void avr8::update_hardware(int cycles)
 
 			}else{	//timer in normal mode: counts up to 0xffff then rolls over
 
-				if (TCNT1 > (0xFFFF - cycles)){
+				if (TCNT1 > (0xFFFFU - cycles)){
 					if (TIMSK1 & TOIE1){
 						TIFR1|=TOV1; //overflow interrupt
 					}
 				}
-				TCNT1 += cycles;
+				TCNT1 = (TCNT1 + cycles) & 0xFFFFU;
 
 				// Calculate next timer event
 
@@ -786,20 +800,32 @@ void avr8::update_hardware(int cycles)
 
 			}
 
-		}
-		else
-		{
-			timer1_next -= cycles;
-			TCNT1 += cycles;
+			TCNT1L = (u8) TCNT1;
+			TCNT1H = (u8) (TCNT1>>8);
+
 		}
 
-		TCNT1L = (u8) TCNT1;
-		TCNT1H = (u8) (TCNT1>>8);
+	}
+	else
+	{
+		timer1_next -= cycles;
+		// Note: A little hack is here, by C / C++ standard a logical
+		// operation's result is 0 for false, 1 for true when
+		// converted to integer. This can be optimized well by a sane
+		// compiler.
+		TCNT1L += cycles;
+		TCNT1H += (unsigned int)(cycles > (unsigned int)(TCNT1L));
 	}
 
 
 
+	// Watchdog notes:
+	//
+	// This is a bare minimum implementation to make the Uzebox kernel's
+	// seed generator operational (used for seeding a PRNG).
+
 	if(WDTCSR & WDE){ //if watchdog enabled
+		watchdogTimer += cycles;
 		if(watchdogTimer>=DELAY16MS && (WDTCSR&WDIE)){
 			WDTCSR|=WDIF;	//watchdog interrupt
 			//reset watchdog
@@ -856,6 +882,14 @@ void avr8::update_hardware(int cycles)
     The EEPROM can not be programmed during a CPU write to the Flash memory.
     */
     // are we attempting to program?
+
+	// TODO (Jubatian):
+	//
+	// cycleCounter is incremented here by 4, but this has no effect on at
+	// least Timer 1 and the video output, maybe even more. Not like
+	// writing to EEPROM would be a common task when drawing the video
+	// frame, though.
+
     if(EECR & (EEPE|EERE))
     {
 		if(EECR & EEPE){
@@ -928,9 +962,9 @@ void avr8::update_hardware(int cycles)
 
 	if (TCCR1B != newTCCR1B)
 	{
-		timer1_next = 0U; // Timer state changes, so force recalculating
+		TCCR1B = newTCCR1B; // Timer increments starts after executing the instruction that sets TCCR1B
+		timer1_next = 0U;   // Timer state changes, so force recalculating
 	}
-	TCCR1B=newTCCR1B; //Timer increments starts after executing the instruction that sets TCCR1B
 	TIFR1|=tempTIFR1;
 }
 
@@ -938,7 +972,7 @@ u8 avr8::exec()
 {
 
 	currentPc=pc;
-	u16 insn = progmem[pc];
+	const unsigned int insn = progmem[pc];
 	cycles = 1;				// Most insns run in one cycle, so assume that
 	u8 Rd, Rr, R, d, CH;
 	u16 uTmp, Rd16, R16;
@@ -1818,7 +1852,7 @@ u8 avr8::exec()
 }
 
 
-void avr8::trigger_interrupt(int location)
+void avr8::trigger_interrupt(unsigned int location)
 {
 
 		// clear interrupt flag
@@ -2039,8 +2073,8 @@ void avr8::handle_key_down(SDL_Event &ev)
 			// SDLK_LEFT/RIGHT/UP/DOWN
 			// SDLK_abcd...
 			// SDLK_RETURN...
-			case SDLK_1: if (left_edge > 0U){ left_edge--; } printf("left=%d\n",left_edge); break;
-			case SDLK_2: if (left_edge < 2047U - ((VIDEO_DISP_WIDTH * 7U) / 3U)){ left_edge++; } printf("left=%d\n",left_edge); break;
+			case SDLK_1: if (left_edge < 2047U - ((VIDEO_DISP_WIDTH * 7U) / 3U)){ left_edge++; } printf("left=%d\n",left_edge); break;
+			case SDLK_2: if (left_edge > 0U){ left_edge--; } printf("left=%d\n",left_edge); break;
 			case SDLK_3: scanline_top--; printf("top=%d\n",scanline_top); break;
 			case SDLK_4: scanline_top++; printf("top=%d\n",scanline_top); break;
 			case SDLK_5: 
