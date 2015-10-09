@@ -31,6 +31,7 @@ THE SOFTWARE.
 #include <queue>
 #include "gdbserver.h"
 #include "SDEmulator.h"
+#include "renderif.h"
 
 #if defined(__WIN32__)
     #include <windows.h> // Win32 memory mapped I/O
@@ -49,14 +50,6 @@ THE SOFTWARE.
 	#pragma comment(lib, "SDLmain.lib")
 #endif
 
-
-// Video: Offset of display on the emulator's surface
-// Syncronized with the kernel, this value now results in the image
-// being perfectly centered in both the emulator and a real TV
-#define VIDEO_LEFT_EDGE  166U
-// Video: Display width; the width of the emulator's output (before any
-// scaling applied) and video capturing
-#define VIDEO_DISP_WIDTH 618U
 
 //Uzebox keyboard defines
 #define KB_STOP		0
@@ -290,12 +283,6 @@ struct avr8
 		newTCCR1B(0),elapsedCyclesSleep(0),hsyncHelp(false),recordMovie(false),
 		timer1_next(0),
 
-		/*SDL*/
-		window(0),renderer(0),surface(0),texture(0),
-
-		/*Video*/
-		fullscreen(false),inset(0),
-
 		/*Audio*/
 		audioRing(1024),enableSound(true),
 
@@ -303,7 +290,7 @@ struct avr8
 		joystickFile(0),pad_mode(SNES_PAD), new_input_mode(false),
 
 		/*GDB*/
-		singleStep(0), nextSingleStep(0), gdbBreakpointFound(false),gdbInvalidOpcode(false),gdbPort(1284),
+		gdbBreakpointFound(false),gdbInvalidOpcode(false),gdbPort(1284),
 		state(CPU_STOPPED),gdb(0),
 
 		/*Uzekeyboard*/
@@ -404,22 +391,16 @@ public:
 
 
 	/*Video*/
+	renderIf* o_renderer;
 	char caption[128];
 
-	SDL_Window *window;
-	SDL_Renderer *renderer;
-	SDL_Surface *surface;
-	SDL_Texture *texture;
 	int sdl_flags;
-	int scanline_count;
+	unsigned int scanline_count;
 	unsigned int current_cycle;
 	int scanline_top;
-	unsigned int left_edge;
-	u32 inset;
-	u32 palette[256];
+	int left_edge;
 	u8  scanline_buf[2048]; // For collecting pixels from a single scanline
 	u8  pixel_raw;          // Raw (8 bit) input pixel
-	bool fullscreen;
 
 	/*Audio*/
 	ringBuffer audioRing;
@@ -443,7 +424,6 @@ public:
 	bool gdbInvalidOpcode;
 	int gdbPort;
 	cpu_state state;
-	bool singleStep, nextSingleStep;
 
 	/*Uzebox Keyboard*/
 	u8 uzeKbState;
@@ -598,7 +578,7 @@ private:
 public:
 
 	bool init_sd();
-	bool init_gui();
+	bool init_gui(renderIf* ren);
 	void init_joysticks();
 	void handle_key_down(SDL_Event &ev);
 	void handle_key_up(SDL_Event &ev);

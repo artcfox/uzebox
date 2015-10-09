@@ -25,6 +25,7 @@ THE SOFTWARE.
 #include "avr8.h"
 #include "gdbserver.h"
 #include "uzerom.h"
+#include "rendersoft.h"
 #include <getopt.h>
 #include <limits.h>
 #include <string.h>
@@ -102,6 +103,8 @@ RomHeader uzeRomHeader;
 int main(int argc,char **argv)
 {
 	avr8 uzebox;
+	renderIf* renderer = new renderSoft();
+	char      caption[256];
         
 #if defined(__GNUC__) && defined(__WIN32__)
     //HACK: workaround for precompiled SDL libraries that block output to console
@@ -132,7 +135,7 @@ int main(int argc,char **argv)
 			uzebox.enableSound = false;
             break;
         case 'f':
-			uzebox.fullscreen = true;
+			renderer->setProp(RENDERIF_PROP_FULL, true);
             break;
         case 'w':
 			// uzebox.sdl_flags = (uzebox.sdl_flags & ~SDL_SWSURFACE) | SDL_HWSURFACE;
@@ -365,10 +368,12 @@ int main(int argc,char **argv)
 		}
 	}
 
-	sprintf(uzebox.caption,"Uzebox Emulator " VERSION " (ESC=quit, F1=help)");
+
+	sprintf(caption,"Uzebox Emulator " VERSION " (ESC=quit, F1=help)");
+	renderer->setStatusStr(caption);
 
 	// init the GUI
-	if (!uzebox.init_gui()){
+	if (!uzebox.init_gui(renderer)){
         printerr("Error: Failed to init GUI.\n\n");
         showHelp(argv[0]);
 		return 1;
@@ -395,12 +400,6 @@ int main(int argc,char **argv)
 
 	while (true)
 	{
-		if (uzebox.fullscreen){
-			puts(uzebox.caption);
-		}else{
-			if (uzebox.window) SDL_SetWindowTitle(uzebox.window,uzebox.caption);
-		}
-
 		left = cycles;
 		now = SDL_GetTicks();
 		while (left > 0)
@@ -408,7 +407,8 @@ int main(int argc,char **argv)
 		
 		now = SDL_GetTicks() - now;
 
-		sprintf(uzebox.caption,"Uzebox Emulator " VERSION " (ESC=quit, F1=help)  %02d.%03d Mhz",cycles/now/1000,(cycles/now)%1000);
+		sprintf(caption,"Uzebox Emulator " VERSION " (ESC=quit, F1=help)  %02d.%03d Mhz",cycles/now/1000,(cycles/now)%1000);
+		renderer->setStatusStr(caption);
 	}
 
 	return 0;

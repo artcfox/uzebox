@@ -279,36 +279,6 @@ void avr8::spi_calculateClock(){
 }
 
 
-// Renders a line into a 32 bit output buffer.
-// Performs a shrink by 2,33
-static void render_line(u32* dest, u8 const* src, u32 const* pal)
-{
-	unsigned int sp;
-	unsigned int dp;
-
-	// Note: This function relies on the destination using a 8 bits per
-	// channel representation, but the channel order is irrelevant.
-
-	for (dp = 0U; dp < ((VIDEO_DISP_WIDTH / 3U) * 3U); dp += 3U)
-	{
-		// Shrink roughly does this:
-		// Source:      |----|----|----|----|----|----|----| (7px)
-		// Destination: |-----------|----------|-----------| (3px)
-		dest[dp + 0U] =
-			(((pal[src[sp + 0U]] & 0xF8F8F8F8U) >> 3) * 3U) +
-			(((pal[src[sp + 1U]] & 0xF8F8F8F8U) >> 3) * 3U) +
-			(((pal[src[sp + 2U]] & 0xFCFCFCFCU) >> 2)     );
-		dest[dp + 1U] =
-			(((pal[src[sp + 2U]] & 0xF8FCFCFCU) >> 2)     ) +
-			(((pal[src[sp + 3U]] & 0xFEFEFEFEU) >> 1)     ) +
-			(((pal[src[sp + 4U]] & 0xFCFCFCFCU) >> 2)     );
-		dest[dp + 2U] =
-			(((pal[src[sp + 4U]] & 0xFCFCFCFCU) >> 2)     ) +
-			(((pal[src[sp + 5U]] & 0xF8F8F8F8U) >> 3) * 3U) +
-			(((pal[src[sp + 6U]] & 0xF8F8F8F8U) >> 3) * 3U);
-		sp += 7U;
-	}
-}
 
 inline void avr8::write_io(u8 addr,u8 value)
 {
@@ -366,36 +336,30 @@ void avr8::write_io_x(u8 addr,u8 value)
 		if(value&1){
 			elapsedCycles=cycleCounter-prevCyclesCounter;
 
-			if (scanline_count == -999 && elapsedCycles >= HSYNC_HALF_PERIOD -10 && elapsedCycles <= HSYNC_HALF_PERIOD + 10)
+			// Temporary solution. The line renderer
+			// should be fed with the appropriate params!
+			// (Generate them proper)
+
+			o_renderer->line(scanline_buf, 1820U, scanline_count * 2U, 1820U, 1820U);
+
+			scanline_count ++;
+			current_cycle = 0U;
+
+			if ( (scanline_count >= 261U) &&
+			     (elapsedCycles >= HSYNC_HALF_PERIOD - 10) &&
+			     (elapsedCycles <= HSYNC_HALF_PERIOD + 10) )
 			{
-			   scanline_count = scanline_top;
-			}
-			else if (scanline_count != -999)
-			{
-
-				if (scanline_count >= 0){
-					render_line(
-						(u32*)((u8*)surface->pixels + scanline_count * surface->pitch),
-						&scanline_buf[left_edge],
-						palette);
-				}
-
-				scanline_count ++;
-				current_cycle = 0U;
-
-				if (scanline_count == 224)
-				{
-
-					SDL_UpdateTexture(texture, NULL, surface->pixels, surface->pitch);
-					SDL_RenderClear(renderer);
-					SDL_RenderCopy(renderer, texture, NULL, NULL);
-					SDL_RenderPresent(renderer);
+					scanline_count = 0U;
 
 					//Send video frame to ffmpeg
-					if (recordMovie && avconv_video) fwrite(surface->pixels, VIDEO_DISP_WIDTH*224*4, 1, avconv_video);
+					// TODO
+					//
+					// Temporarily disabled. The real solution would be moving this off to a seperate module!
+					// The dirty solution would be sending the data line by line to avconv.
+					// if (recordMovie && avconv_video) fwrite(surface->pixels, VIDEO_DISP_WIDTH*224*4, 1, avconv_video);
 
 					SDL_Event event;
-					while (singleStep? SDL_WaitEvent(&event) : SDL_PollEvent(&event))
+					while (SDL_PollEvent(&event))
 					{
 						switch (event.type) {
 							case SDL_KEYDOWN:
@@ -450,20 +414,20 @@ void avr8::write_io_x(u8 addr,u8 value)
 							buttons[0] &= ~(1<<9);
 						if (mouse_buttons & SDL_BUTTON_RMASK)
 							buttons[0] &= ~(1<<8);
-						// keep mouse centered so it doesn't get stuck on edge of screen.
-						// ...and immediately consume the bogus motion event it generated.
-						if (fullscreen)
-						{
-							SDL_WarpMouseInWindow(window,400,300);
-							SDL_GetRelativeMouseState(&mouse_dx,&mouse_dy);
-						}
+						//
+						// TODO: What this was supposed to do ???
+						//
+						//// keep mouse centered so it doesn't get stuck on edge of screen.
+						//// ...and immediately consume the bogus motion event it generated.
+						//if (fullscreen)
+						//{
+						//	SDL_WarpMouseInWindow(window,400,300);
+						//	SDL_GetRelativeMouseState(&mouse_dx,&mouse_dy);
+						//}
 					}
 					else
 						buttons[0] |= 0xFFFF8000;
 
-					singleStep = nextSingleStep;
-					scanline_count = -999;
-				}
 			}
 
 		   prevCyclesCounter=cycleCounter;
@@ -1884,7 +1848,7 @@ bool avr8::init_sd()
 }
 
 
-bool avr8::init_gui()
+bool avr8::init_gui(renderIf* ren)
 {
 	if ( SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO | SDL_INIT_JOYSTICK) != 0 )
 	{
@@ -1895,42 +1859,10 @@ bool avr8::init_gui()
 	atexit(SDL_Quit);
 	init_joysticks();
 
-	window = SDL_CreateWindow(caption,SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,VIDEO_DISP_WIDTH,448,fullscreen?SDL_WINDOW_FULLSCREEN_DESKTOP:SDL_WINDOW_RESIZABLE);
-	if (!window){
-		fprintf(stderr, "CreateWindow failed: %s\n", SDL_GetError());
-		return false;
-	}
-	renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-	if (!renderer){
-		SDL_DestroyWindow(window);
-		fprintf(stderr, "CreateRenderer failed: %s\n", SDL_GetError());
-		return false;
-	}
-	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
-	SDL_RenderSetLogicalSize(renderer, VIDEO_DISP_WIDTH, 448);
-
-	surface = SDL_CreateRGBSurface(0, VIDEO_DISP_WIDTH, 224, 32, 0,0,0,0);
-	if(!surface){
-		fprintf(stderr, "CreateRGBSurface failed: %s\n", SDL_GetError());
-		return false;
-	}
-
-	texture = SDL_CreateTexture(renderer,surface->format->format,SDL_TEXTUREACCESS_STREAMING,surface->w,surface->h);
-	if (!texture){
-		SDL_DestroyRenderer(renderer);
-		SDL_DestroyWindow(window);
-		fprintf(stderr, "CreateTexture failed: %s\n", SDL_GetError());
-		return false;
-	}
-
-	SDL_RenderClear(renderer);
-	SDL_RenderCopy(renderer, texture, NULL, NULL);
-	SDL_RenderPresent(renderer);
-
-
-	if (fullscreen)
+	o_renderer = ren;
+	if (!(o_renderer->init()))
 	{
-		SDL_ShowCursor(0);
+		return false;
 	}
 
 	// Open audio driver
@@ -1954,55 +1886,45 @@ bool avr8::init_gui()
 	}
 
 	current_cycle = 0U;
-	scanline_top = -33-5;
-	scanline_count = -999;
-	//Syncronized with the kernel, this value now results in the image 
-	//being perfectly centered in both the emulator and a real TV
-	left_edge = VIDEO_LEFT_EDGE;
+	scanline_count = 0U;
+	scanline_top = 0;
+	left_edge = 0;
 
 	latched_buttons[0] = buttons[0] = ~0;
 	latched_buttons[1] = buttons[1] = ~0;
 	mouse_scale = 1;
-
-	// Precompute final palette for speed.
-	// Should build some NTSC compensation magic in here too.
-	for (int i=0; i<256; i++)
-	{
-		int red = (((i >> 0) & 7) * 255) / 7;
-		int green = (((i >> 3) & 7) * 255) / 7;
-		int blue = (((i >> 6) & 3) * 255) / 3;
-		palette[i] = SDL_MapRGB(surface->format, red, green, blue);
-	}
-	
-	hsync_more_col=SDL_MapRGB(surface->format, 255,0, 0); //red
-	hsync_less_col=SDL_MapRGB(surface->format, 255,255, 0); //yellow
 
 	if (recordMovie){
 
 		if (avconv_video == NULL){
 			// Detect the pixel format that the GPU picked for optimal speed
 			char pix_fmt[] = "aaaa";
-			switch (surface->format->Rmask) {
-			case 0xff000000: pix_fmt[3] = 'r'; break;
-			case 0x00ff0000: pix_fmt[2] = 'r'; break;
-			case 0x0000ff00: pix_fmt[1] = 'r'; break;
-			case 0x000000ff: pix_fmt[0] = 'r'; break;
-			}
-			switch (surface->format->Gmask) {
-			case 0xff000000: pix_fmt[3] = 'g'; break;
-			case 0x00ff0000: pix_fmt[2] = 'g'; break;
-			case 0x0000ff00: pix_fmt[1] = 'g'; break;
-			case 0x000000ff: pix_fmt[0] = 'g'; break;
-			}
-			switch (surface->format->Bmask) {
-			case 0xff000000: pix_fmt[3] = 'b'; break;
-			case 0x00ff0000: pix_fmt[2] = 'b'; break;
-			case 0x0000ff00: pix_fmt[1] = 'b'; break;
-			case 0x000000ff: pix_fmt[0] = 'b'; break;
-			}
+			//
+			// TODO: Temporarily disabled. Needs to be rewritten, see at the line output.
+			// Maybe best would be sending line by line. Maybe the very best would be moving
+			// this entire thing to its own module.
+			//
+			//switch (surface->format->Rmask) {
+			//case 0xff000000: pix_fmt[3] = 'r'; break;
+			//case 0x00ff0000: pix_fmt[2] = 'r'; break;
+			//case 0x0000ff00: pix_fmt[1] = 'r'; break;
+			//case 0x000000ff: pix_fmt[0] = 'r'; break;
+			//}
+			//switch (surface->format->Gmask) {
+			//case 0xff000000: pix_fmt[3] = 'g'; break;
+			//case 0x00ff0000: pix_fmt[2] = 'g'; break;
+			//case 0x0000ff00: pix_fmt[1] = 'g'; break;
+			//case 0x000000ff: pix_fmt[0] = 'g'; break;
+			//}
+			//switch (surface->format->Bmask) {
+			//case 0xff000000: pix_fmt[3] = 'b'; break;
+			//case 0x00ff0000: pix_fmt[2] = 'b'; break;
+			//case 0x0000ff00: pix_fmt[1] = 'b'; break;
+			//case 0x000000ff: pix_fmt[0] = 'b'; break;
+			//}
 			printf("Pixel Format = %s\n", pix_fmt);
 			char avconv_video_cmd[1024] = {0};
-			snprintf(avconv_video_cmd, sizeof(avconv_video_cmd) - 1, "ffmpeg -y -f rawvideo -s %ux224 -pix_fmt %s -r 59.94 -i - -vf scale=960:720 -sws_flags neighbor -an -b:v 1000k uzemtemp.mp4", VIDEO_DISP_WIDTH, pix_fmt);
+			snprintf(avconv_video_cmd, sizeof(avconv_video_cmd) - 1, "ffmpeg -y -f rawvideo -s %ux224 -pix_fmt %s -r 59.94 -i - -vf scale=960:720 -sws_flags neighbor -an -b:v 1000k uzemtemp.mp4", 618U, pix_fmt);
 			avconv_video = popen(avconv_video_cmd, "w");
 		}
 		if (avconv_video == NULL){
@@ -2017,11 +1939,14 @@ bool avr8::init_gui()
 		}
 	}
 
-	//Set window icon
-	SDL_Surface *slogo;
-	slogo = SDL_CreateRGBSurfaceFrom((void *)&logo,32,32,32,32*4,0xFF,0xff00,0xff0000,0xff000000);
-	SDL_SetWindowIcon(window,slogo);
-	SDL_FreeSurface(slogo);
+//
+// TODO: This icon thing still have to be solved... (renderer problem)
+//
+//	//Set window icon
+//	SDL_Surface *slogo;
+//	slogo = SDL_CreateRGBSurfaceFrom((void *)&logo,32,32,32,32*4,0xFF,0xff00,0xff0000,0xff000000);
+//	SDL_SetWindowIcon(window,slogo);
+//	SDL_FreeSurface(slogo);
 
 	return true;
 }
@@ -2059,10 +1984,10 @@ void avr8::handle_key_down(SDL_Event &ev)
 			// SDLK_LEFT/RIGHT/UP/DOWN
 			// SDLK_abcd...
 			// SDLK_RETURN...
-			case SDLK_1: if (left_edge < 2047U - ((VIDEO_DISP_WIDTH * 7U) / 3U)){ left_edge++; } printf("left=%d\n",left_edge); break;
-			case SDLK_2: if (left_edge > 0U){ left_edge--; } printf("left=%d\n",left_edge); break;
-			case SDLK_3: scanline_top--; printf("top=%d\n",scanline_top); break;
-			case SDLK_4: scanline_top++; printf("top=%d\n",scanline_top); break;
+			case SDLK_1: o_renderer->setProp(RENDERIF_PROP_HOFF, ++left_edge); printf("left=%d\n",left_edge); break;
+			case SDLK_2: o_renderer->setProp(RENDERIF_PROP_HOFF, --left_edge); printf("left=%d\n",left_edge); break;
+			case SDLK_3: o_renderer->setProp(RENDERIF_PROP_VOFF, --scanline_top); printf("top=%d\n",scanline_top); break;
+			case SDLK_4: o_renderer->setProp(RENDERIF_PROP_VOFF, ++scanline_top); printf("top=%d\n",scanline_top); break;
 			case SDLK_5: 
 				if (pad_mode == NES_PAD)
 					pad_mode = SNES_PAD;
@@ -2096,9 +2021,7 @@ void avr8::handle_key_down(SDL_Event &ev)
                 shutdown(0);
                 /* no break */
 			case SDLK_PRINTSCREEN:
-				sprintf(ssbuf,"uzem_%03d.bmp",ssnum++);
-				printf("saving screenshot to '%s'...\n",ssbuf);
-				SDL_SaveBMP(surface,ssbuf);
+				o_renderer->screenShot();
 				break;
 			case SDLK_0:
 				PIND = PIND & ~0b00001100;
@@ -2909,6 +2832,10 @@ void avr8::shutdown(int errcode){
             fclose(f);
         }
 	}
+
+	// Dirty stuff, but for now do it here. Delete the renderer
+
+	delete o_renderer;
 
     exit(errcode);
 }

@@ -20,7 +20,7 @@ TARGETS = debug release
 ######################################
 # Sources
 ######################################
-SRCS := uzem.cpp avr8.cpp uzerom.cpp gdbserver.cpp SDEmulator.cpp
+SRCS := uzem.cpp avr8.cpp uzerom.cpp gdbserver.cpp SDEmulator.cpp rendersoft.cpp
 
 ######################################
 # Architecture
@@ -43,6 +43,7 @@ endif
 # Global Flags
 ######################################
 CPPFLAGS += $(SDL_FLAGS) -D$(OS) -D_GNU_SOURCE=1 -DGUI=1 -DJOY_ANALOG_DEADZONE=8192
+CPPFLAGS += -Wall
 # TODO: fix warnings before enable 'CPPFLAGS += -Wall'
 
 ######################################
