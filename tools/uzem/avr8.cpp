@@ -47,6 +47,7 @@ More info at uzebox.org
 #include "SDEmulator.h"
 #include "Keyboard.h"
 #include "logo.h"
+#include "screenshot.h"
 
 using namespace std;
 
@@ -406,6 +407,12 @@ void avr8::write_io_x(u8 addr,u8 value)
 						// http://www.repairfaq.org/REPAIR/F_SNES.html
 						// we always report "low sensitivity"
 						int mouse_dx, mouse_dy;
+						// Note (Jubatian): Mouse for now can only be read in this manner
+						// since in fullscreen the renderers need to work around the problem
+						// of having edges, which they do by repeatedely centering the mouse,
+						// consuming the motion by a call to GetRelativeMouseState. So by
+						// "normal" event processing bogus mouse motion events would hinder
+						// the operation of the mouse in fullscreen.
 						u8 mouse_buttons = SDL_GetRelativeMouseState(&mouse_dx,&mouse_dy);
 						mouse_dx >>= mouse_scale;
 						mouse_dy >>= mouse_scale;
@@ -416,16 +423,6 @@ void avr8::write_io_x(u8 addr,u8 value)
 							buttons[0] &= ~(1<<9);
 						if (mouse_buttons & SDL_BUTTON_RMASK)
 							buttons[0] &= ~(1<<8);
-						//
-						// TODO: What this was supposed to do ???
-						//
-						//// keep mouse centered so it doesn't get stuck on edge of screen.
-						//// ...and immediately consume the bogus motion event it generated.
-						//if (fullscreen)
-						//{
-						//	SDL_WarpMouseInWindow(window,400,300);
-						//	SDL_GetRelativeMouseState(&mouse_dx,&mouse_dy);
-						//}
 					}
 					else
 						buttons[0] |= 0xFFFF8000;
@@ -2023,7 +2020,7 @@ void avr8::handle_key_down(SDL_Event &ev)
                 shutdown(0);
                 /* no break */
 			case SDLK_PRINTSCREEN:
-				o_renderer->screenShot();
+				screenShot(o_renderer);
 				break;
 			case SDLK_0:
 				PIND = PIND & ~0b00001100;

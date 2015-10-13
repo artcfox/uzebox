@@ -36,12 +36,28 @@ THE SOFTWARE.
 
 
 // Default horizontal offset relative to the center of the display in cycles
-#define RENDERIF_HOFF 886
+#define RENDERIF_HOFF     886
 
 // Defualt vertical offset relative to the center of the display in lines
 // Note: This assumes 525 lines! (Halve for progressive scan)
-#define RENDERIF_VOFF 300
+#define RENDERIF_VOFF     300
 
+// Unscaled height of visible area in rows in normal mode. Center of the
+// display should be at the half of this.
+#define RENDERIF_N_HEIGHT 448U
+
+// Unscaled width of visible area in pixels in normal mode (1442 cycles,
+// 2,333333 cycles / pixel). Center of the display should be at the half of
+// this. If the renderer's aspect ratio differs, it should center its display
+// over this area.
+#define RENDERIF_N_WIDTH  618U
+
+// Unscaled height of visible area in rows in debug mode
+#define RENDERIF_D_HEIGHT 530U
+
+// Unscaled width of visible area in pixels in debug mode (1848 cycles,
+// 2,333333 cycles / pixel).
+#define RENDERIF_D_WIDTH  792U
 
 
 // Property: Horizontal offset
@@ -66,6 +82,15 @@ THE SOFTWARE.
 // Property: Display height
 // The preferred height (pixels) of the output picture.
 #define RENDERIF_PROP_HEIGHT   4U
+
+// Property: Debug mode
+// If set (nonzero), debug mode is enabled. In debug mode the renderer should
+// attempt to display all cycles, with some kind of indications on where the
+// horizontal and vertical blankings are (and whether they conform the
+// requirements of proper NTSC output). Output is debug mode horizontally
+// begins at the start of the received line buffer (the end of the HSync
+// pulse), and vertically at line zero.
+#define RENDERIF_PROP_DEBUG    5U
 
 
 
@@ -143,6 +168,14 @@ public:
 	//
 	virtual bool setProp(auint prop, asint val, bool delay) = 0;
 
+	// Get property
+	//
+	// Returns the value of a renderer property. When delayed output is
+	// active, for the affected properties the return value is
+	// implementation defined.
+	//
+	virtual asint getProp(auint prop) = 0;
+
 	// Allows the renderer doing something when there is no render
 	//
 	// This function should be called less often than a normal picture
@@ -161,12 +194,15 @@ public:
 	//
 	virtual void setStatusStr(char const* str) = 0;
 
-	// Asks for creating a single screenshot
+	// Returns a 0RGB line
 	//
-	// Calling this should result in the creation of a single screenshot
-	// into the current directory. This interface may change later.
+	// Extracts and returns a scanline of output. The returned pixels are
+	// in 0x00RRGGBB format. Number of lines and pixel counts should be
+	// expected according to the RENDERIF_N_HEIGHT and RENDERIF_N_WIDTH
+	// constants in normal mode, and RENDERIF_D_HEIGHT and
+	// RENDERIF_D_WIDTH in debug mode.
 	//
-	virtual void screenShot() = 0;
+	virtual void getLine(uint32* dest, auint lno) = 0;
 };
 
 

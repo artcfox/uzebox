@@ -30,14 +30,15 @@ THE SOFTWARE.
 
 
 #include "rendersoft.h"
+#include "rendersupp.h"
 #include <stdlib.h>
 
 
 
 // Width of the display surface
-#define DISPLAY_WIDTH   618U
+#define DISPLAY_WIDTH   RENDERIF_N_WIDTH
 // Height of the display surface
-#define DISPLAY_HEIGHT  448U
+#define DISPLAY_HEIGHT  RENDERIF_N_HEIGHT
 
 
 
@@ -47,7 +48,6 @@ renderSoft::renderSoft()
 	o_hoff = RENDERIF_HOFF - (((DISPLAY_WIDTH / 3) * 7) / 2);
 	o_voff = RENDERIF_VOFF - (DISPLAY_HEIGHT / 2);
 	o_full = false;
-	o_ssnum = 0U;
 	o_isinit = false;
 }
 
@@ -134,57 +134,6 @@ bool renderSoft::init()
 
 
 
-// Renders a line into a 32 bit output buffer.
-// Performs a shrink by 2,33
-// dest0 is where the line will be output at full intensity
-// dest1 is where it will be output with 3/4 (scanline effect)
-// off is the offset in the source (source width is 2048 elements)
-static void render_line(uint32* dest0, uint32* dest1,
-                        uint8 const* src, auint off,
-                        auint const* pal)
-{
-	auint  sp = off;
-	auint  dp;
-	auint  px;
-	auint  t0, t1, t2, t3, t4;
-
-	// Note: This function relies on the destination using a 8 bits per
-	// channel representation, but the channel order is irrelevant.
-
-	t0 = (pal[src[(sp - 1U) & 0x7FFU]] & 0xF0F0F0F0U) >> 4;
-	t1 = (pal[src[(sp + 0U) & 0x7FFU]] & 0xF0F0F0F0U) >> 4;
-	for (dp = 0U; dp < ((DISPLAY_WIDTH / 3U) * 3U); dp += 3U)
-	{
-		// Shrink roughly does this:
-		// Source:      |----|----|----|----|----|----|----| (7px)
-		// Destination: |-----------|----------|-----------| (3px)
-		// Note that when combining pixels back together, in total a
-		// multiplication with 17 will restore full intensity
-		// (0xF * 17 = 0xFF)
-		t2 = (pal[src[(sp + 1U) & 0x7FFU]] & 0xF0F0F0F0U) >> 4;
-		t3 = (pal[src[(sp + 2U) & 0x7FFU]] & 0xF0F0F0F0U) >> 4;
-		t4 = (pal[src[(sp + 3U) & 0x7FFU]] & 0xF0F0F0F0U) >> 4;
-		px = (t0 * 4U) + (t1 * 4U) + (t2 * 4U) + (t3 * 4U) + (t4 * 1U);
-		dest0[dp + 0U] = px;
-		dest1[dp + 0U] = ((px & 0xFCFCFCFCU) >> 2) * 3U;
-		t0 = (pal[src[(sp + 4U) & 0x7FFU]] & 0xF0F0F0F0U) >> 4;
-		t1 = (pal[src[(sp + 5U) & 0x7FFU]] & 0xF0F0F0F0U) >> 4;
-		px = (t2 * 2U) + (t3 * 4U) + (t4 * 5U) + (t0 * 4U) + (t1 * 2U);
-		dest0[dp + 1U] = px;
-		dest1[dp + 1U] = ((px & 0xFCFCFCFCU) >> 2) * 3U;
-		t2 = (pal[src[(sp + 6U) & 0x7FFU]] & 0xF0F0F0F0U) >> 4;
-		t3 = (pal[src[(sp + 7U) & 0x7FFU]] & 0xF0F0F0F0U) >> 4;
-		px = (t4 * 1U) + (t0 * 4U) + (t1 * 4U) + (t2 * 4U) + (t3 * 4U);
-		dest0[dp + 2U] = px;
-		dest1[dp + 2U] = ((px & 0xFCFCFCFCU) >> 2) * 3U;
-		sp += 7U;
-		t0 = t2;
-		t1 = t3;
-	}
-}
-
-
-
 void renderSoft::line(uint8 const* lbuf, auint llen, auint lno,
                       auint hsync, auint vsync)
 {
@@ -197,6 +146,7 @@ void renderSoft::line(uint8 const* lbuf, auint llen, auint lno,
 
 	if (o_prevl > lno) // New frame started
 	{
+
 		for (auint i = 0U; i < DISPLAY_HEIGHT; i ++)
 		{
 			if (!o_isfill[i])
@@ -206,6 +156,22 @@ void renderSoft::line(uint8 const* lbuf, auint llen, auint lno,
 			o_isfill[i] = false;
 		}
 		SDL_UpdateWindowSurface(o_window);
+
+		// If fullscreen, then keep the mouse centered so relative
+		// mouse motion events may keep coming independent of the
+		// actual mouse position. Also consume the relative motion
+		// caused by this action. This is not an ideal solution, but
+		// works for now ("bogus" mouse motion events are still
+		// generated, only works if the input code uses
+		// GetRelativeMouseState to follow the mouse).
+
+		if (o_full)
+		{
+			SDL_WarpMouseInWindow(o_window, DISPLAY_WIDTH >> 1, DISPLAY_HEIGHT >> 1);
+			int dummyx, dummyy;
+			SDL_GetRelativeMouseState(&dummyx, &dummyy);
+		}
+
 	}
 
 	// Note: For small line numbers, due to unsigned arithmetic, it wraps,
@@ -214,10 +180,10 @@ void renderSoft::line(uint8 const* lbuf, auint llen, auint lno,
 	if ((lno - o_voff) < DISPLAY_HEIGHT)
 	{
 		auint voff = (lno - o_voff);
-		render_line(
-			(uint32*)((uint8*)(o_wsurf->pixels) + ((voff     ) * o_wsurf->pitch)),
-			(uint32*)((uint8*)(o_wsurf->pixels) + ((voff ^ 1U) * o_wsurf->pitch)),
-			lbuf, o_hoff,
+		rendersupp_line32(
+			(uint32*)(&((uint8*)(o_wsurf->pixels))[((voff     ) * o_wsurf->pitch)]),
+			(uint32*)(&((uint8*)(o_wsurf->pixels))[((voff ^ 1U) * o_wsurf->pitch)]),
+			lbuf, o_hoff, DISPLAY_WIDTH,
 			o_palette);
 		o_isfill[voff     ] = true;
 		o_isfill[voff ^ 1U] = true;
@@ -301,6 +267,36 @@ bool renderSoft::setProp(auint prop, asint val, bool delay)
 
 
 
+asint renderSoft::getProp(auint prop)
+{
+	switch (prop)
+	{
+	case RENDERIF_PROP_HOFF:
+		return o_hoff;
+	case RENDERIF_PROP_VOFF:
+		return o_voff;
+	case RENDERIF_PROP_FULL:
+		if (o_full)
+		{
+			return 1;
+		}
+		else
+		{
+			return 0;
+		}
+	case RENDERIF_PROP_WIDTH:
+		return DISPLAY_WIDTH;
+	case RENDERIF_PROP_HEIGHT:
+		return DISPLAY_HEIGHT;
+	case RENDERIF_PROP_DEBUG:
+		return 0;
+	default:
+		return 0;
+	}
+}
+
+
+
 void renderSoft::tick()
 {
 	if (!o_isinit)
@@ -333,10 +329,10 @@ void renderSoft::setStatusStr(char const* str)
 
 
 
-void renderSoft::screenShot()
+void renderSoft::getLine(uint32* dest, auint lno)
 {
-	char ssbuf[64];
-	sprintf(ssbuf, "uzem_%03u.bmp", (unsigned int)(o_ssnum++));
-	printf("Saving screenshot to '%s'...\n", ssbuf);
-	SDL_SaveBMP(o_wsurf, ssbuf);
+	if (lno < DISPLAY_HEIGHT)
+	{
+		rendersupp_convsurf(dest, o_wsurf, lno, 0U, DISPLAY_WIDTH);
+	}
 }

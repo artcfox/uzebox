@@ -1,5 +1,5 @@
 /*
-Software renderer
+Renderer assistance functions
 
 -----
 
@@ -29,62 +29,37 @@ THE SOFTWARE.
 */
 
 
-#ifndef RENDERSOFT_H
-#define RENDERSOFT_H
+#ifndef RENDERSUPP_H
+#define RENDERSUPP_H
 
-#include "renderif.h"
+#include "types.h"
 #include "SDL2/SDL.h"
 
 
-// Maximal length of status string
-#define RENDERSOFT_STATUS_LEN 1024U
+// Renders a line into a 32 bit output buffer.
+//
+// This can be used to produce progressive scan output. Performs a shrink by
+// 2,333333 as required for the aspect ratio of Uzebox. Can be used with any
+// channel order as long as there are 8 bits per component and the palette is
+// set up proper.
+//
+// dest0 is where the line will be output at full intensity
+// dest1 is where it will be output with 3/4 (scanline effect)
+// off is the offset in the source (input line buffer; width is 2048 elements)
+// len is the count of pixels to render (truncated to largest multiple of 3)
+//
+void rendersupp_line32(uint32* dest0, uint32* dest1,
+                       uint8 const* src, auint off, auint len, auint const* pal);
 
 
-class renderSoft: public renderIf
-{
-public:
-	renderSoft();
-	~renderSoft();
-
-	// See renderif
-	bool init();
-
-	// See renderIf
-	void line(uint8 const* lbuf, auint llen, auint lno,
-	          auint hsync, auint vsync);
-
-	// See renderif
-	bool setProp(auint prop, asint val);
-
-	// See renderif
-	bool setProp(auint prop, asint val, bool delay);
-
-	// See renderif
-	asint getProp(auint prop);
-
-	// See renderIf
-	void tick();
-
-	// See renderIf
-	void setStatusStr(char const* str);
-
-	// See renderif
-	void getLine(uint32* dest, auint lno);
-
-private:
-	void destroy();
-
-	bool         o_isinit;
-	SDL_Window*  o_window;
-	SDL_Surface* o_wsurf;
-	auint        o_palette[256];
-	auint        o_hoff;
-	auint        o_voff;
-	bool         o_full;
-	auint        o_prevl;
-	char         o_status[RENDERSOFT_STATUS_LEN];
-	bool         o_isfill[525];
-};
+// Outputs into 0x00RRGGBB output from an SDL surface.
+//
+// lno is the line number to read from the surface
+// off is the start pixel offset within the line
+// len is the count of pixels to output
+//
+void rendersupp_convsurf(uint32* dest, SDL_Surface const* src,
+                         auint lno, auint off, auint len);
 
 
 #endif

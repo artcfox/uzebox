@@ -1,5 +1,5 @@
 /*
-Software renderer
+Screenshot function
 
 -----
 
@@ -29,62 +29,23 @@ THE SOFTWARE.
 */
 
 
-#ifndef RENDERSOFT_H
-#define RENDERSOFT_H
+#ifndef SCREENSHOT_H
+#define SCREENSHOT_H
 
+#include "types.h"
 #include "renderif.h"
-#include "SDL2/SDL.h"
 
 
-// Maximal length of status string
-#define RENDERSOFT_STATUS_LEN 1024U
-
-
-class renderSoft: public renderIf
-{
-public:
-	renderSoft();
-	~renderSoft();
-
-	// See renderif
-	bool init();
-
-	// See renderIf
-	void line(uint8 const* lbuf, auint llen, auint lno,
-	          auint hsync, auint vsync);
-
-	// See renderif
-	bool setProp(auint prop, asint val);
-
-	// See renderif
-	bool setProp(auint prop, asint val, bool delay);
-
-	// See renderif
-	asint getProp(auint prop);
-
-	// See renderIf
-	void tick();
-
-	// See renderIf
-	void setStatusStr(char const* str);
-
-	// See renderif
-	void getLine(uint32* dest, auint lno);
-
-private:
-	void destroy();
-
-	bool         o_isinit;
-	SDL_Window*  o_window;
-	SDL_Surface* o_wsurf;
-	auint        o_palette[256];
-	auint        o_hoff;
-	auint        o_voff;
-	bool         o_full;
-	auint        o_prevl;
-	char         o_status[RENDERSOFT_STATUS_LEN];
-	bool         o_isfill[525];
-};
+// Generates a screenshot
+//
+// Produces a screenshot into the current directory using a renderer's
+// getLine method. It keeps track of screenshot file names internally.
+//
+// Notes: Later this may be improved by adding support for different (such
+// as PNG) file formats, path, etc, leaving this interface function as-is,
+// adding other functions to set these.
+//
+void screenShot(renderIf* ren);
 
 
 #endif

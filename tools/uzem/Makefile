@@ -28,7 +28,7 @@ endif
 ######################################
 # Sources
 ######################################
-SRCS := uzem.cpp avr8.cpp uzerom.cpp gdbserver.cpp SDEmulator.cpp rendersoft.cpp
+SRCS := uzem.cpp avr8.cpp uzerom.cpp gdbserver.cpp SDEmulator.cpp rendersoft.cpp rendersupp.cpp screenshot.cpp
 
 ######################################
 # Architecture

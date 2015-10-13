@@ -1,5 +1,5 @@
 /*
-Software renderer
+Screenshot function
 
 -----
 
@@ -29,62 +29,48 @@ THE SOFTWARE.
 */
 
 
-#ifndef RENDERSOFT_H
-#define RENDERSOFT_H
-
-#include "renderif.h"
+#include "screenshot.h"
 #include "SDL2/SDL.h"
 
 
-// Maximal length of status string
-#define RENDERSOFT_STATUS_LEN 1024U
+
+// Screenshot number
+static auint screenshot_no = 0U;
 
 
-class renderSoft: public renderIf
+
+void screenShot(renderIf* ren)
 {
-public:
-	renderSoft();
-	~renderSoft();
+	char         ssbuf[64];
+	SDL_Surface* surf;
+	auint        wdt = RENDERIF_N_WIDTH;
+	auint        hgt = RENDERIF_N_HEIGHT;
 
-	// See renderif
-	bool init();
+	if (ren->getProp(RENDERIF_PROP_DEBUG) != 0)
+	{
+		wdt = RENDERIF_D_WIDTH;
+		hgt = RENDERIF_D_HEIGHT;
+	}
 
-	// See renderIf
-	void line(uint8 const* lbuf, auint llen, auint lno,
-	          auint hsync, auint vsync);
+	surf = SDL_CreateRGBSurface(0U, wdt, hgt, 32U, 0x00FF0000U, 0x0000FF00U, 0x000000FFU, 0U);
+	if (surf == NULL)
+	{
+		printf("Unable to create screenshot: %s\n", SDL_GetError());
+		return;
+	}
 
-	// See renderif
-	bool setProp(auint prop, asint val);
+	for (auint i = 0U; i < hgt; i++)
+	{
+		ren->getLine((uint32*)(&((uint8*)(surf->pixels))[i * surf->pitch]) , i);
+	}
 
-	// See renderif
-	bool setProp(auint prop, asint val, bool delay);
+	sprintf(ssbuf, "uzem_%03u.bmp", (unsigned int)(screenshot_no++));
+	printf("Saving screenshot to '%s'...\n", ssbuf);
 
-	// See renderif
-	asint getProp(auint prop);
+	if (SDL_SaveBMP(surf, ssbuf) != 0)
+	{
+		printf("Unable to create screenshot: %s\n", SDL_GetError());
+	}
 
-	// See renderIf
-	void tick();
-
-	// See renderIf
-	void setStatusStr(char const* str);
-
-	// See renderif
-	void getLine(uint32* dest, auint lno);
-
-private:
-	void destroy();
-
-	bool         o_isinit;
-	SDL_Window*  o_window;
-	SDL_Surface* o_wsurf;
-	auint        o_palette[256];
-	auint        o_hoff;
-	auint        o_voff;
-	bool         o_full;
-	auint        o_prevl;
-	char         o_status[RENDERSOFT_STATUS_LEN];
-	bool         o_isfill[525];
-};
-
-
-#endif
+	SDL_FreeSurface(surf);
+}
