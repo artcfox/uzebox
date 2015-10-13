@@ -31,6 +31,9 @@ THE SOFTWARE.
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 
 static const struct option longopts[] ={
@@ -99,10 +102,21 @@ int ends_with(const char* name, const char* extension, size_t length)
 
 // header for use with UzeRom files
 RomHeader uzeRomHeader;
+avr8 uzebox;
+
+#ifdef __EMSCRIPTEN__
+void one_iter() {
+       const int cycles=1000000;
+       static int left;
+
+       left = cycles;
+       while (left > 0)
+               left -= uzebox.exec();
+}
+#endif
 
 int main(int argc,char **argv)
 {
-	avr8 uzebox;
 	renderIf* renderer = new renderSoft();
 	char      caption[256];
         
@@ -186,7 +200,7 @@ int main(int argc,char **argv)
     // get leftovers
     for (int i = optind; i < argc; ++i) {
         if(heximage){
-            printerr("Error: HEX file already specified (too many arguments?).\n\n",heximage);
+            printerr("Error: HEX file already specified (too many arguments?).\n\n");
             showHelp(argv[0]);
             return 1;
         }
@@ -196,7 +210,7 @@ int main(int argc,char **argv)
     }
     
     if (uzebox.gdbPort == 0) {
-        printerr("Error: invalid port address.\n\n",uzebox.gdbPort);
+        printerr("Error: invalid port address.\n\n");
         showHelp(argv[0]);
         return 1;
     }
@@ -269,7 +283,7 @@ int main(int argc,char **argv)
 
     	//build the capture file name
 		int len=strlen(uzebox.romName);
-		char capfname[len+4];
+		char capfname[len+5];
 		strcpy(capfname,uzebox.romName);
 		capfname[len+0]='.';
 		capfname[len+1]='c';
@@ -398,6 +412,10 @@ int main(int argc,char **argv)
 	//at the reset vector takes only 2 cycles
 	uzebox.cycleCounter=-1;
 
+#ifdef __EMSCRIPTEN__
+	emscripten_set_main_loop(one_iter, 60, 1);
+	emscripten_set_main_loop_timing(EM_TIMING_RAF, 1);
+#else
 	while (true)
 	{
 		left = cycles;
@@ -410,6 +428,7 @@ int main(int argc,char **argv)
 		sprintf(caption,"Uzebox Emulator " VERSION " (ESC=quit, F1=help)  %02d.%03d Mhz",cycles/now/1000,(cycles/now)%1000);
 		renderer->setStatusStr(caption);
 	}
+#endif
 
 	return 0;
 }

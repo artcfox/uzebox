@@ -306,7 +306,9 @@ void avr8::write_io_x(u8 addr,u8 value)
 		if (enableSound && TCCR2B)
 		{
 			// raw pcm sample at 15.7khz
+#ifndef __EMSCRIPTEN__
 			while (audioRing.isFull())SDL_Delay(1);
+#endif
 			SDL_LockAudio();
 			audioRing.push(value);
 			SDL_UnlockAudio();
@@ -2463,12 +2465,12 @@ void avr8::update_spi(){
 
         case 0x4c: //CMD12 =  STOP_TRANSMISSION
             SPDR = 0x00;
-           	spiState = SPI_RESPOND_SINGLE;
-           	spiResponseBuffer[0] = 0xff; //stuff byte
-           	spiResponseBuffer[1] = 0xff; //stuff byte
-           	spiResponseBuffer[2] = 0x00; // card is ready //in "trans" state
-           	spiResponseEnd = spiResponsePtr+3;
+            spiState = SPI_RESPOND_SINGLE;
+            spiResponseBuffer[0] = 0xff; //stuff byte
+            spiResponseBuffer[1] = 0xff; //stuff byte
+            spiResponseBuffer[2] = 0x00; // card is ready //in "trans" state
             spiResponsePtr = spiResponseBuffer;
+            spiResponseEnd = spiResponsePtr+3;
             spiByteCount = 0;
             break;
 
@@ -2727,6 +2729,7 @@ u8 avr8::SDReadByte(){
 }
 
 void avr8::SDWriteByte(u8 value){    
+    (void)value;
     fprintf(stderr, "No write support in SD emulation\n");
 }
 
@@ -2764,7 +2767,7 @@ void avr8::LoadEEPROMFile(const char* filename){
 
 		size_t result=fread(eeprom,1,size,f);
         if (result != size){
-        	printf("Warning: fread in %s returned an unexpected value:%i,\n", __FUNCTION__,result);
+        	printf("Warning: fread in %s returned an unexpected value:%lu,\n", __FUNCTION__,result);
         }
         fclose(f);
     }
