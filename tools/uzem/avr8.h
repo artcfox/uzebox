@@ -170,6 +170,30 @@ typedef int16_t s16;
 typedef uint32_t u32;
 typedef int32_t s32;
 
+typedef struct __attribute__((packed)) {
+	u16  arg2;
+	u8   arg1;
+	u8   opNum;
+} instructionDecode_t;
+
+typedef struct {
+	u8   opNum;
+	char opName[32];
+	u8   arg1Type;
+	u8   arg1Mul;
+	u8   arg1Offset;
+	u8   arg1Neg;
+	u8   arg2Type;
+	u8   arg2Mul;
+	u8   arg2Offset;
+	u8   arg2Neg;
+	u8   words;
+	u8   clocks;
+	u16  mask;
+	u16  arg1Mask;
+	u16  arg2Mask;
+} instructionList_t;
+
 using namespace std;
 
 struct joyButton { u8 button; u8 bit; };
@@ -332,7 +356,7 @@ struct avr8
 
 	/*Core*/
 	u16 progmem[progSize/2];
-	u32 progmemDecoded[progSize/2];
+	instructionDecode_t progmemDecoded[progSize/2];
 	u16 pc,currentPc;
 	unsigned int cycleCounter;
 private:
@@ -352,8 +376,8 @@ public:
     bool hsyncHelp;
     bool recordMovie;
 	char romName[256];
-	u16 decodeArg(u16 flash, u16 argMask);
-	u32 instructionDecode(u16 rawFlash);
+	u16 decodeArg(u16 flash, u16 argMask, u8 argNeg);
+	instructionDecode_t instructionDecode(u16 rawFlash);
 	void decodeFlash(void);
 	void decodeFlash(u16 address);
 
