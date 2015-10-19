@@ -957,11 +957,120 @@ void avr8::update_hardware(unsigned int cycles)
 	TIFR1|=tempTIFR1;
 }
 
+typedef struct {
+	u8   opNum;
+	char opName[32];
+	u8   arg1Type;
+	u8   arg1Mul;
+	u8   arg1Offset;
+	u8   arg2Type;
+	u8   arg2Mul;
+	u8   arg2Offset;
+	u8   words;
+	u8   clocks;
+	u16  mask;
+	u16  arg1Mask;
+	u16  arg2Mask;
+} instructionList_t;
+
+instructionList_t instructionList[] = {
+
+	{   1,"ADC    r%d, r%d "               ,   1,   1,   0,   2,   1,   0,   1,   1, 0b0001110000000000, 0b0000000111110000, 0b0000001000001111},
+	{   2,"ADD    r%d, r%d "               ,   1,   1,   0,   2,   1,   0,   1,   1, 0b0000110000000000, 0b0000000111110000, 0b0000001000001111},
+	{   3,"ADIW   r%d, %d "                ,   1,   2,  24,   3,   1,   0,   1,   2, 0b1001011000000000, 0b0000000000110000, 0b0000000011001111},
+	{   4,"AND    r%d, r%d "               ,   1,   1,   0,   2,   1,   0,   1,   1, 0b0010000000000000, 0b0000000111110000, 0b0000001000001111},
+	{   5,"ANDI   r%d, %d "                ,   1,   1,  16,   3,   1,   0,   1,   1, 0b0111000000000000, 0b0000000011110000, 0b0000111100001111},
+	{   6,"ASR    r%d "                    ,   1,   1,   0,   0,   1,   0,   1,   1, 0b1001010000000101, 0b0000000111110000, 0b0000000000000000},
+	{   7,"BCLR   %d "                     ,   7,   1,   0,   0,   1,   0,   1,   1, 0b1001010010001000, 0b0000000001110000, 0b0000000000000000},
+	{   8,"BLD    r%d, %d "                ,   1,   1,   0,   6,   1,   0,   1,   1, 0b1111100000000000, 0b0000000111110000, 0b0000000000000111},
+	{   9,"BRBC   %d, %d "                 ,   7,   1,   0,   3,   1,   0,   1,   2, 0b1111010000000000, 0b0000000000000111, 0b0000001111111000},
+	{  10,"BRBS   %d, %d "                 ,   7,   1,   0,   3,   1,   0,   1,   2, 0b1111000000000000, 0b0000000000000111, 0b0000001111111000},
+	{  11,"BREAK "                         ,   0,   1,   0,   0,   1,   0,   1,   1, 0b1001010110011000, 0b0000000000000000, 0b0000000000000000},
+	{  12,"BSET   %d "                     ,   7,   1,   0,   0,   1,   0,   1,   1, 0b1001010000001000, 0b0000000001110000, 0b0000000000000000},
+	{  13,"BST    r%d, %d "                ,   1,   1,   0,   6,   1,   0,   1,   1, 0b1111101000000000, 0b0000000111110000, 0b0000000000000111},
+	{ 142,"CALL   %d (+ next word) "       ,   0,   1,   0,   3,   1,   0,   2,   4, 0b1001010000001110, 0b0000000000000000, 0b0000000111110001},
+	{  15,"CBI    io%d, %d "               ,   8,   1,   0,   6,   1,   0,   1,   2, 0b1001100000000000, 0b0000000011111000, 0b0000000000000111},
+	{  16,"COM    r%d "                    ,   1,   1,   0,   0,   1,   0,   1,   1, 0b1001010000000000, 0b0000000111110000, 0b0000000000000000},
+	{  17,"CP     r%d, r%d "               ,   1,   1,   0,   2,   1,   0,   1,   1, 0b0001010000000000, 0b0000000111110000, 0b0000001000001111},
+	{  18,"CPC    r%d, r%d "               ,   1,   1,   0,   2,   1,   0,   1,   1, 0b0000010000000000, 0b0000000111110000, 0b0000001000001111},
+	{  19,"CPI    r%d, %d "                ,   1,   1,  16,   3,   1,   0,   1,   1, 0b0011000000000000, 0b0000000011110000, 0b0000111100001111},
+	{  20,"CPSE   r%d, r%d "               ,   1,   1,   0,   2,   1,   0,   1,   3, 0b0001000000000000, 0b0000000111110000, 0b0000001000001111},
+	{  21,"DEC    r%d "                    ,   1,   1,   0,   0,   1,   0,   1,   1, 0b1001010000001010, 0b0000000111110000, 0b0000000000000000},
+	{  22,"EOR    r%d, r%d "               ,   1,   1,   0,   2,   1,   0,   1,   1, 0b0010010000000000, 0b0000000111110000, 0b0000001000001111},
+	{  23,"FMUL   r%d, r%d "               ,   1,   1,  16,   2,   1,  16,   1,   2, 0b0000001100001000, 0b0000000001110000, 0b0000000000000111},
+	{  24,"FMULS  r%d, r%d "               ,   1,   1,  16,   2,   1,  16,   1,   2, 0b0000001110000000, 0b0000000001110000, 0b0000000000000111},
+	{  25,"FMULSU r%d, r%d "               ,   1,   1,  16,   2,   1,  16,   1,   2, 0b0000001110001000, 0b0000000001110000, 0b0000000000000111},
+	{  26,"ICALL "                         ,   0,   1,   0,   0,   1,   0,   1,   3, 0b1001010100001001, 0b0000000000000000, 0b0000000000000000},
+	{  27,"IJMP "                          ,   0,   1,   0,   0,   1,   0,   1,   2, 0b1001010000001001, 0b0000000000000000, 0b0000000000000000},
+	{  28,"IN     r%d, io%d "              ,   1,   1,   0,   8,   1,   0,   1,   1, 0b1011000000000000, 0b0000000111110000, 0b0000011000001111},
+	{  29,"INC    r%d "                    ,   1,   1,   0,   0,   1,   0,   1,   1, 0b1001010000000011, 0b0000000111110000, 0b0000000000000000},
+	{ 158,"JMP    %d (+ next word) "       ,   0,   1,   0,   3,   1,   0,   2,   3, 0b1001010000001100, 0b0000000000000000, 0b0000000111110001},
+	{  31,"LD     r%d, -X "                ,   1,   1,   0,   0,   1,   0,   1,   3, 0b1001000000001110, 0b0000000111110000, 0b0000000000000000},
+	{  32,"LD     r%d, -Y "                ,   1,   1,   0,   0,   1,   0,   1,   3, 0b1001000000001010, 0b0000000111110000, 0b0000000000000000},
+	{  33,"LD     r%d, -Z "                ,   1,   1,   0,   0,   1,   0,   1,   3, 0b1001000000000010, 0b0000000111110000, 0b0000000000000000},
+	{  34,"LD     r%d, X "                 ,   1,   1,   0,   0,   1,   0,   1,   3, 0b1001000000001100, 0b0000000111110000, 0b0000000000000000},
+	{  35,"LD     r%d, X+ "                ,   1,   1,   0,   0,   1,   0,   1,   3, 0b1001000000001101, 0b0000000111110000, 0b0000000000000000},
+	{  36,"LD     r%d, Y+ "                ,   1,   1,   0,   0,   1,   0,   1,   3, 0b1001000000001001, 0b0000000111110000, 0b0000000000000000},
+	{  37,"LD     r%d, Y+%d "              ,   1,   1,   0,   5,   1,   0,   1,   3, 0b1000000000001000, 0b0000000111110000, 0b0010110000000111},
+	{  38,"LD     r%d, Z+ "                ,   1,   1,   0,   0,   1,   0,   1,   3, 0b1001000000000001, 0b0000000111110000, 0b0000000000000000},
+	{  39,"LD     r%d, Z+%d "              ,   1,   1,   0,   5,   1,   0,   1,   3, 0b1000000000000000, 0b0000000111110000, 0b0010110000000111},
+	{  40,"LDI    r%d, %d "                ,   1,   1,  16,   3,   1,   0,   1,   1, 0b1110000000000000, 0b0000000011110000, 0b0000111100001111},
+	{ 169,"LDS    r%d, %d (+next word) "   ,   1,   1,   0,   0,   1,   0,   2,   2, 0b1001000000000000, 0b0000000111110000, 0b0000000000000000},
+	{  42,"LPM "                           ,   0,   1,   0,   0,   1,   0,   1,   3, 0b1001010111001000, 0b0000000000000000, 0b0000000000000000},
+	{  43,"LPM    r%d, Z "                 ,   1,   1,   0,   0,   1,   0,   1,   3, 0b1001000000000100, 0b0000000111110000, 0b0000000000000000},
+	{  44,"LPM    r%d, Z+ "                ,   1,   1,   0,   0,   1,   0,   1,   3, 0b1001000000000101, 0b0000000111110000, 0b0000000000000000},
+	{  45,"LSR    r%d "                    ,   1,   1,   0,   0,   1,   0,   1,   1, 0b1001010000000110, 0b0000000111110000, 0b0000000000000000},
+	{  46,"MOV    r%d, r%d "               ,   1,   1,   0,   2,   1,   0,   1,   1, 0b0010110000000000, 0b0000000111110000, 0b0000001000001111},
+	{  47,"MOVW   r%d, r%d "               ,   1,   2,   0,   2,   2,   0,   1,   1, 0b0000000100000000, 0b0000000011110000, 0b0000000000001111},
+	{  48,"MUL    r%d, r%d "               ,   1,   1,   0,   2,   1,   0,   1,   2, 0b1001110000000000, 0b0000000111110000, 0b0000001000001111},
+	{  49,"MULS   r%d, r%d "               ,   1,   1,  16,   2,   1,  16,   1,   2, 0b0000001000000000, 0b0000000011110000, 0b0000000000001111},
+	{  50,"MULSU  r%d, r%d "               ,   1,   1,  16,   2,   1,  16,   1,   2, 0b0000001100000000, 0b0000000001110000, 0b0000000000000111},
+	{  51,"NEG    r%d "                    ,   1,   1,   0,   0,   1,   0,   1,   1, 0b1001010000000001, 0b0000000111110000, 0b0000000000000000},
+	{  52,"NOP "                           ,   0,   1,   0,   0,   1,   0,   1,   1, 0b0000000000000000, 0b0000000000000000, 0b0000000000000000},
+	{  53,"OR     r%d, r%d "               ,   1,   1,   0,   2,   1,   0,   1,   1, 0b0010100000000000, 0b0000000111110000, 0b0000001000001111},
+	{  54,"ORI    r%d, %d "                ,   1,   1,  16,   3,   1,   0,   1,   1, 0b0110000000000000, 0b0000000011110000, 0b0000111100001111},
+	{  55,"OUT    io%d, r%d "              ,   8,   1,   0,   1,   1,   0,   1,   1, 0b1011100000000000, 0b0000011000001111, 0b0000000111110000},
+	{  56,"POP    r%d "                    ,   1,   1,   0,   0,   1,   0,   1,   2, 0b1001000000001111, 0b0000000111110000, 0b0000000000000000},
+	{  57,"PUSH   r%d "                    ,   1,   1,   0,   0,   1,   0,   1,   2, 0b1001001000001111, 0b0000000111110000, 0b0000000000000000},
+	{  58,"RCALL  %d "                     ,   0,   1,   0,   3,   1,   0,   1,   3, 0b1101000000000000, 0b0000000000000000, 0b0000111111111111},
+	{  59,"RET "                           ,   0,   1,   0,   0,   1,   0,   1,   4, 0b1001010100001000, 0b0000000000000000, 0b0000000000000000},
+	{  60,"RETI "                          ,   0,   1,   0,   0,   1,   0,   1,   4, 0b1001010100011000, 0b0000000000000000, 0b0000000000000000},
+	{  61,"RJMP   %d "                     ,   0,   1,   0,   3,   1,   0,   1,   2, 0b1100000000000000, 0b0000000000000000, 0b0000111111111111},
+	{  62,"ROR    r%d "                    ,   1,   1,   0,   0,   1,   0,   1,   1, 0b1001010000000111, 0b0000000111110000, 0b0000000000000000},
+	{  63,"SBC    r%d, r%d "               ,   1,   1,   0,   2,   1,   0,   1,   1, 0b0000100000000000, 0b0000000111110000, 0b0000001000001111},
+	{  64,"SBCI   r%d, %d "                ,   1,   1,  16,   3,   1,   0,   1,   1, 0b0100000000000000, 0b0000000011110000, 0b0000111100001111},
+	{  65,"SBI    io%d, %d "               ,   8,   1,   0,   6,   1,   0,   1,   2, 0b1001101000000000, 0b0000000011111000, 0b0000000000000111},
+	{  66,"SBIC   io%d, %d "               ,   8,   1,   0,   6,   1,   0,   1,   3, 0b1001100100000000, 0b0000000011111000, 0b0000000000000111},
+	{  67,"SBIS   io%d, %d "               ,   8,   1,   0,   6,   1,   0,   1,   3, 0b1001101100000000, 0b0000000011111000, 0b0000000000000111},
+	{  68,"SBIW   r%d, %d "                ,   1,   2,  24,   3,   1,   0,   1,   2, 0b1001011100000000, 0b0000000000110000, 0b0000000011001111},
+	{  69,"SBRC   r%d, %d "                ,   2,   1,   0,   6,   1,   0,   1,   3, 0b1111110000000000, 0b0000000111110000, 0b0000000000000111},
+	{  70,"SBRS   r%d, %d "                ,   2,   1,   0,   6,   1,   0,   1,   3, 0b1111111000000000, 0b0000000111110000, 0b0000000000000111},
+	{  71,"SLEEP "                         ,   0,   1,   0,   0,   1,   0,   1,   1, 0b1001010110001000, 0b0000000000000000, 0b0000000000000000},
+	{  72,"SPM    z+ "                     ,   0,   1,   0,   0,   1,   0,   1,   1, 0b1001010111101000, 0b0000000000000000, 0b0000000000000000},
+	{  73,"ST     -x, r%d "                ,   2,   1,   0,   0,   1,   0,   1,   2, 0b1001001000001110, 0b0000000111110000, 0b0000000000000000},
+	{  74,"ST     -y, r%d "                ,   2,   1,   0,   0,   1,   0,   1,   2, 0b1001001000001010, 0b0000000111110000, 0b0000000000000000},
+	{  75,"ST     -z, r%d "                ,   2,   1,   0,   0,   1,   0,   1,   2, 0b1001001000000010, 0b0000000111110000, 0b0000000000000000},
+	{  76,"ST     x, r%d "                 ,   2,   1,   0,   0,   1,   0,   1,   2, 0b1001001000001100, 0b0000000111110000, 0b0000000000000000},
+	{  77,"ST     x+, r%d "                ,   2,   1,   0,   0,   1,   0,   1,   2, 0b1001001000001101, 0b0000000111110000, 0b0000000000000000},
+	{  78,"ST     y+, r%d "                ,   2,   1,   0,   0,   1,   0,   1,   2, 0b1001001000001001, 0b0000000111110000, 0b0000000000000000},
+	{  79,"ST     y+q, r%d (q=%d) "        ,   1,   1,   0,   5,   1,   0,   1,   2, 0b1000001000001000, 0b0000000111110000, 0b0010110000000111},
+	{  80,"ST     z+, r%d "                ,   2,   1,   0,   0,   1,   0,   1,   2, 0b1001001000000001, 0b0000000111110000, 0b0000000000000000},
+	{  81,"ST     z+q, r%d (q=%d) "        ,   1,   1,   0,   5,   1,   0,   1,   2, 0b1000001000000000, 0b0000000111110000, 0b0010110000000111},
+	{ 210,"STS    k, r%d "                 ,   1,   1,   0,   0,   1,   0,   2,   2, 0b1001001000000000, 0b0000000111110000, 0b0000000000000000},
+	{  83,"SUB    r%d, r%d "               ,   1,   1,   0,   2,   1,   0,   1,   1, 0b0001100000000000, 0b0000000111110000, 0b0000001000001111},
+	{  84,"SUBI   r%d, %d "                ,   1,   1,  16,   3,   1,   0,   1,   1, 0b0101000000000000, 0b0000000011110000, 0b0000111100001111},
+	{  85,"SWAP   r%d "                    ,   1,   1,   0,   0,   1,   0,   1,   1, 0b1001010000000010, 0b0000000111110000, 0b0000000000000000},
+	{  86,"WDR "                           ,   0,   1,   0,   0,   1,   0,   1,   1, 0b1001010110101000, 0b0000000000000000, 0b0000000000000000},
+	{   0,"END"                            ,   0,   0,   0,   0,   0,   0,   0,   0, 0b0000000000000000, 0b0000000000000000, 0b0000000000000000}
+
+};
+
 u8 avr8::exec()
 {
 
 	currentPc=pc;
 	const unsigned int insn = progmem[pc];
+	const u32 insnDecoded = progmemDecoded[pc];
 	cycles = 1;				// Most insns run in one cycle, so assume that
 	u8 Rd, Rr, R, d, CH;
 	u16 uTmp, Rd16, R16;
@@ -1010,626 +1119,35 @@ u8 avr8::exec()
 	// be buggy then (the behavior of things like having the stack over IO
 	// area...). This solution is at least fast for these instructions.
 
-	switch (insn >> 10)
-	{
-	case 0x00U:
-		// 0000 0000 0000 0000		NOP
-		// 0000 0001 dddd rrrr		MOVW Rd+1:Rd,Rr+1:R
-		// 0000 0010 dddd rrrr		MULS Rd,Rr
-		// 0000 0011 0ddd 0rrr		MULSU Rd,Rr (registers are in 16-23 range)
-		// 0000 0011 0ddd 1rrr		FMUL Rd,Rr (registers are in 16-23 range)
-		// 0000 0011 1ddd 0rrr		FMULS Rd,Rr
-		// 0000 0011 1ddd 1rrr		FMULSU Rd,Rr
-		switch (((insn >> 6) & 0xEU) | ((insn >> 3) & 0x1U))
-		{
-		case 0x0U: case 0x1U: case 0x2U: case 0x3U:
-			// 0000 0000 0000 0000		NOP
-			break;
-		case 0x4U: case 0x5U: case 0x6U: case 0x7U:
-			// 0000 0001 dddd rrrr		MOVW Rd+1:Rd,Rr+1:R
-			// Don't use tab because the operand is really wide
-			Rd = D4 << 1; 
-			Rr = R4 << 1; 
-			r[Rd] = r[Rr]; 
-			r[Rd+1] = r[Rr+1]; 
-			break;
-		case 0x8U: case 0x9U: case 0xAU: case 0xBU:
-			// 0000 0010 dddd rrrr		MULS Rd,Rr
-			Rd = r[D4 + 16]; 
-			Rr = r[R4 + 16];
-			sTmp = (s8)Rd * (s8)Rr; 
-			r0 = (u8)sTmp; 
-			r1 = (u8)(sTmp >> 8);
-			clr_bits(SREG, SREG_CM | SREG_ZM);
-			UPDATE_CZ_MUL(sTmp);
-			cycles=2;
-			break;
-		case 0xCU:
-			// 0000 0011 0ddd 0rrr		MULSU Rd,Rr (registers are in 16-23 range)
-			Rd = r[D3 + 16];
-			Rr = r[R3 + 16]; 
-			sTmp = (s8)Rd * (u8)Rr; 
-			r0 = (u8)sTmp; 
-			r1 = (u8)(sTmp >> 8);
-			clr_bits(SREG, SREG_CM | SREG_ZM);
-			UPDATE_CZ_MUL(sTmp);
-			cycles=2;
-			break;
-		case 0xDU:
-			// 0000 0011 0ddd 1rrr		FMUL Rd,Rr (registers are in 16-23 range)
-			Rd = r[D3 + 16];
-			Rr = r[R3 + 16]; 
-			uTmp = (u8)Rd * (u8)Rr; 
-			r0 = (u8)(uTmp << 1); 
-			r1 = (u8)(uTmp >> 7);
-			clr_bits(SREG, SREG_CM | SREG_ZM);
-			UPDATE_CZ_MUL(uTmp);
-			cycles=2;
-			break;
-		case 0xEU:
-			// 0000 0011 1ddd 0rrr		FMULS Rd,Rr
-			Rd = r[D3 + 16];
-			Rr = r[R3 + 16]; 
-			sTmp = (s8)Rd * (s8)Rr; 
-			r0 = (u8)(sTmp << 1); 
-			r1 = (u8)(sTmp >> 7);
-			clr_bits(SREG, SREG_CM | SREG_ZM);
-			UPDATE_CZ_MUL(sTmp);
-			cycles=2;
-			break;
-		default:
-			// 0000 0011 1ddd 1rrr		FMULSU Rd,Rr
-			Rd = r[D3 + 16];
-			Rr = r[R3 + 16]; 
-			sTmp = (s8)Rd * (u8)Rr; 
-			r0 = (u8)(sTmp << 1); 
-			r1 = (u8)(sTmp >> 7);
-			clr_bits(SREG, SREG_CM | SREG_ZM);
-			UPDATE_CZ_MUL(sTmp);
-			cycles=2;
-			break;
-		}
-		break;
+	switch (insnDecoded & 0x0000007F){
+//		case  1: // 0001 11rd dddd rrrr		ADC Rd,Rr (ROL is ADC Rd,Rd)
+//			Rd = r[d = D5];
+//			Rr = r[R5];
+//			R = Rd + Rr + C;
+//			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
+//			UPDATE_HC_ADD; UPDATE_SVN_ADD; UPDATE_Z;
+//			r[d] = R;
+//			break;
 
-	case 0x01U:
-		// 0000 01rd dddd rrrr		CPC Rd,Rr
-		Rd = r[D5];
-		Rr = r[R5];
-		R = Rd - Rr - C;
-		clr_bits(SREG, SREG_CM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
-		UPDATE_HC_SUB; UPDATE_SVN_SUB; UPDATE_CLEAR_Z;
-		break;
-
-	case 0x02U:
-		// 0000 10rd dddd rrrr		SBC Rd,Rr
-		Rd = r[d = D5];
-		Rr = r[R5];
-		R = Rd - Rr - C;
-		clr_bits(SREG, SREG_CM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
-		UPDATE_HC_SUB; UPDATE_SVN_SUB; UPDATE_CLEAR_Z;
-		r[d] = R;
-		break;
-
-	case 0x03U:
-		// 0000 11rd dddd rrrr		ADD Rd,Rr (LSL is ADD Rd,Rd)
-		Rd = r[d = D5];
-		Rr = r[R5];
-		R = Rd + Rr;
-		clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
-		UPDATE_HC_ADD; UPDATE_SVN_ADD; UPDATE_Z; 
-		r[d] = R;
-		break;
-
-	case 0x04U:
-		// 0001 00rd dddd rrrr		CPSE Rd,Rr
-		Rd = r[D5];
-		Rr = r[R5];
-		if (Rd == Rr)
-		{
-			uTmp = get_insn_size(progmem[pc]);
-			cycles += uTmp;
-			pc += uTmp;
-		}
-		break;
-
-	case 0x05U:
-		// 0001 01rd dddd rrrr		CP Rd,Rr
-		Rd = r[D5];
-		Rr = r[R5];
-		R = Rd - Rr;
-		clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
-		UPDATE_HC_SUB; UPDATE_SVN_SUB; UPDATE_Z;
-		break;
-
-	case 0x06U:
-		// 0001 10rd dddd rrrr		SUB Rd,Rr
-		Rd = r[d = D5];
-		Rr = r[R5];
-		R = Rd - Rr;
-		clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
-		UPDATE_HC_SUB; UPDATE_SVN_SUB; UPDATE_Z;
-		r[d] = R;
-		break;
-
-	case 0x07U:
-		// 0001 11rd dddd rrrr		ADC Rd,Rr (ROL is ADC Rd,Rd)
-		Rd = r[d = D5];
-		Rr = r[R5];
-		R = Rd + Rr + C;
-		clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
-		UPDATE_HC_ADD; UPDATE_SVN_ADD; UPDATE_Z; 
-		r[d] = R;
-		break;
-
-	case 0x08U:
-		// 0010 00rd dddd rrrr		AND Rd,Rr (TST is AND Rd,Rd)
-		Rd = r[d = D5];
-		Rr = r[R5];
-		R = Rd & Rr;
-		clr_bits(SREG, SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
-		UPDATE_SVN_LOGICAL; UPDATE_Z;
-		r[d] = R;
-		break;
-
-	case 0x09U:
-		// 0010 01rd dddd rrrr		EOR Rd,Rr (CLR is EOR Rd,Rd)
-		Rd = r[d = D5];
-		Rr = r[R5];
-		R = Rd ^ Rr;
-		clr_bits(SREG, SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
-		UPDATE_SVN_LOGICAL; UPDATE_Z;
-		r[d] = R;
-		break;
-
-	case 0x0AU:
-		// 0010 10rd dddd rrrr		OR Rd,Rr
-		Rd = r[d = D5];
-		Rr = r[R5];
-		R = Rd | Rr;
-		clr_bits(SREG, SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
-		UPDATE_SVN_LOGICAL; UPDATE_Z;
-		r[d] = R;
-		break;
-
-	case 0x0BU:
-		// 0010 11rd dddd rrrr		MOV Rd,Rr
-		r[D5]  = r[R5];
-		break;
-
-	case 0x0CU: case 0x0DU: case 0x0EU: case 0x0FU:
-		// 0011 KKKK dddd KKKK		CPI Rd,K
-		Rd = r[D4 + 16];
-		Rr = K8;
-		R = Rd - Rr;
-		clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
-		UPDATE_HC_SUB; UPDATE_SVN_SUB; UPDATE_Z;
-		break;
-
-	case 0x10U: case 0x11U: case 0x12U: case 0x13U:
-		// 0100 KKKK dddd KKKK		SBCI Rd,K
-		Rd = r[d = D4 + 16];
-		Rr = K8;
-		R = Rd - Rr - C;
-		clr_bits(SREG, SREG_CM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
-		UPDATE_HC_SUB; UPDATE_SVN_SUB; UPDATE_CLEAR_Z;
-		r[d] = R;
-		break;
-
-	case 0x14U: case 0x15U: case 0x16U: case 0x17U:
-		// 0101 KKKK dddd KKKK		SUBI Rd,K
-		Rd = r[d = D4 + 16];
-		Rr = K8;
-		R = Rd - Rr;
-		clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
-		UPDATE_HC_SUB; UPDATE_SVN_SUB; UPDATE_Z;
-		r[d] = R;
-		break;
-
-	case 0x18U: case 0x19U: case 0x1AU: case 0x1BU:
-		// 0110 KKKK dddd KKKK		ORI Rd,K (same as SBR insn)
-		Rd = r[d = D4 + 16];
-		Rr = K8;
-		R = Rd | Rr;
-		clr_bits(SREG, SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
-		UPDATE_SVN_LOGICAL; UPDATE_Z;
-		r[d] = R;
-		break;
-
-	case 0x1CU: case 0x1DU: case 0x1EU: case 0x1FU:
-		// 0111 KKKK dddd KKKK		ANDI Rd,K (CBR is ANDI with K complemented)
-		Rd = r[d = D4 + 16];
-		Rr = K8;
-		R = Rd & Rr;
-		clr_bits(SREG, SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
-		UPDATE_SVN_LOGICAL; UPDATE_Z;
-		r[d] = R;
-		break;
-
-	case 0x20U: case 0x21U: case 0x22U: case 0x23U:
-	case 0x28U: case 0x29U: case 0x2AU: case 0x2BU:
-		// 10q0 qq0d dddd 0qqq		LD Rd,Z+q
-		// 10q0 qq0d dddd 1qqq		LD Rd,Y+q
-		// 10q0 qq1d dddd 0qqq		ST Z+q,Rd
-		// 10q0 qq1d dddd 1qqq		ST Y+q,Rd
-		Rd = D5;
-		Rr = (insn & 7U) | ((insn >> 7) & 0x18U) | ((insn >> 8) & 0x20U);
-		cycles = 2U;
-		switch (((insn >> 8) & 2U) | ((insn >> 3) & 1U))
-		{
-		case 0U:
-			// 10q0 qq0d dddd 0qqq		LD Rd,Z+q
-			r[Rd] = read_sram_io(Z + Rr);
-			break;
-		case 1U:
-			// 10q0 qq0d dddd 1qqq		LD Rd,Y+q
-			r[Rd] = read_sram_io(Y + Rr);
-			break;
-		case 2U:
-			// 10q0 qq1d dddd 0qqq		ST Z+q,Rd
-			write_sram_io(Z + Rr, r[Rd]);
-			break;
-		default:
-			// 10q0 qq1d dddd 1qqq		ST Y+q,Rd
-			write_sram_io(Y + Rr, r[Rd]);
-			break;
-		}
-		break;
-
-	case 0x24U:
-		// 1001 000d dddd 0000		LDS Rd,k (next word is rest of address)
-		// 1001 000d dddd 0001		LD Rd,Z+
-		// 1001 000d dddd 0010		LD Rd,-Z
-		// 1001 000d dddd 0100		LPM Rd,Z
-		// 1001 000d dddd 0101		LPM Rd,Z+
-		// 1001 000d dddd 1001		LD Rd,Y+
-		// 1001 000d dddd 1010		LD Rd,-Y
-		// 1001 000d dddd 1100		LD rd,X
-		// 1001 000d dddd 1101		LD rd,X+
-		// 1001 000d dddd 1110		LD rd,-X
-		// 1001 000d dddd 1111		POP Rd
-		// 1001 001d dddd 0000		STS k,Rr (next word is rest of address)
-		// 1001 001r rrrr 0001		ST Z+,Rr
-		// 1001 001r rrrr 0010		ST -Z,Rr
-		// 1001 001r rrrr 1001		ST Y+,Rr
-		// 1001 001r rrrr 1010		ST -Y,Rr
-		// 1001 001r rrrr 1100		ST X,Rr
-		// 1001 001r rrrr 1101		ST X+,Rr
-		// 1001 001r rrrr 1110		ST -X,Rr
-		// 1001 001d dddd 1111		PUSH Rd
-		switch (((insn >> 5) & 0x10U) | (insn & 0xFU))
-		{
-		case 0x00U:
-			// 1001 000d dddd 0000		LDS Rd,k (next word is rest of address)
-			cycles = 2U;
-			r[D5] = read_sram_io(progmem[pc++]);
-			break;
-		case 0x01U:
-			// 1001 000d dddd 0001		LD Rd,Z+
-			cycles = 2U;
-			r[D5] = read_sram_io(Z);
-			INC_Z;
-			break;
-		case 0x02U:
-			// 1001 000d dddd 0010		LD Rd,-Z
-			DEC_Z;
-			cycles = 2U;
-			r[D5] = read_sram_io(Z);
-			break;
-		case 0x04U:
-			// 1001 000d dddd 0100		LPM Rd,Z
-			r[D5] = read_progmem(Z);
-			cycles=3;
-			break;
-		case 0x05U:
-			// 1001 000d dddd 0101		LPM Rd,Z+
-			r[D5] = read_progmem(Z);
-			INC_Z;
-			cycles=3;
-			break;
-		case 0x09U:
-			// 1001 000d dddd 1001		LD Rd,Y+
-			cycles = 2U;
-			r[D5] = read_sram_io(Y);
-			INC_Y;
-			break;
-		case 0x0AU:
-			// 1001 000d dddd 1010		LD Rd,-Y
-			DEC_Y;
-			cycles = 2U;
-			r[D5] = read_sram_io(Y);
-			break;
-		case 0x0CU:
-			// 1001 000d dddd 1100		LD rd,X
-			cycles = 2U;
-			r[D5] = read_sram_io(X);
-			break;
-		case 0x0DU:
-			// 1001 000d dddd 1101		LD rd,X+
-			cycles = 2U;
-			r[D5] = read_sram_io(X);
-			INC_X;
-			break;
-		case 0x0EU:
-			// 1001 000d dddd 1110		LD rd,-X
-			DEC_X;
-			cycles = 2U;
-			r[D5] = read_sram_io(X);
-			break;
-		case 0x0FU:
-			// 1001 000d dddd 1111		POP Rd
-			INC_SP;
-			cycles = 2U;
-			r[D5] = read_sram(SP);
-			break;
-		case 0x10U:
-			// 1001 001d dddd 0000		STS k,Rr (next word is rest of address)
-			cycles = 2U;
-			write_sram_io(progmem[pc++],r[D5]);
-			break;
-		case 0x11U:
-			// 1001 001r rrrr 0001		ST Z+,Rr
-			cycles = 2U;
-			write_sram_io(Z,r[D5]);
-			INC_Z;
-			break;
-		case 0x12U:
-			// 1001 001r rrrr 0010		ST -Z,Rr
-			DEC_Z;
-			cycles = 2U;
-			write_sram_io(Z,r[D5]);
-			break;
-		case 0x19U:
-			// 1001 001r rrrr 1001		ST Y+,Rr
-			cycles = 2U;
-			write_sram_io(Y,r[D5]);
-			INC_Y;
-			break;
-		case 0x1AU:
-			// 1001 001r rrrr 1010		ST -Y,Rr
-			DEC_Y;
-			cycles = 2U;
-			write_sram_io(Y,r[D5]);
-			break;
-		case 0x1CU:
-			// 1001 001r rrrr 1100		ST X,Rr
-			cycles = 2U;
-			write_sram_io(X,r[D5]);
-			break;
-		case 0x1DU:
-			// 1001 001r rrrr 1101		ST X+,Rr
-			cycles = 2U;
-			write_sram_io(X,r[D5]);
-			INC_X;
-			break;
-		case 0x1EU:
-			// 1001 001r rrrr 1110		ST -X,Rr
-			DEC_X;
-			cycles = 2U;
-			write_sram_io(X,r[D5]);
-			break;
-		case 0x1FU:
-			// 1001 001d dddd 1111		PUSH Rd
-			cycles = 2U;
-			write_sram(SP,r[D5]);
-			DEC_SP;
-			break;
-		default:
-			// Illegal op.
-			ILLEGAL_OP;
-			break;
-		}
-		break;
-
-	case 0x25U:
-		// 1001 010d dddd 0000		COM Rd
-		// 1001 010d dddd 0001		NEG Rd
-		// 1001 010d dddd 0010		SWAP Rd
-		// 1001 010d dddd 0011		INC Rd
-		// 1001 010d dddd 0101		ASR Rd
-		// 1001 010d dddd 0110		LSR Rd
-		// 1001 010d dddd 0111		ROR Rd
-		// 1001 010d dddd 1010		DEC Rd
-		// 1001 010k kkkk 110k		JMP k (next word is rest of address)
-		// 1001 010k kkkk 111k		CALL k (next word is rest of address)
-		// 1001 0100 0sss 1000		BSET s (SEC, etc are aliases with sss implicit)
-		// 1001 0100 1sss 1000		BCLR s (CLC, etc are aliases with sss implicit)
-		// 1001 0100 0000 1001		IJMP (jump thru Z register)
-		// 1001 0101 0000 1000		RET
-		// 1001 0101 0000 1001		ICALL (call thru Z register)
-		// 1001 0101 0001 1000		RETI
-		// 1001 0101 1000 1000		SLEEP
-		// 1001 0101 1001 1000		BREAK
-		// 1001 0101 1010 1000		WDR
-		// 1001 0101 1100 1000		LPM (r0 implied, why is this special?)
-		// 1001 0101 1110 1000		SPM Z (writes R1:R0)
-		// 1001 0110 KKdd KKKK		ADIW Rd+1:Rd,K   (16-bit add to upper four register pairs)
-		// 1001 0111 KKdd KKKK		SBIW Rd+1:Rd,K
-		switch (((insn >> 4) & 0x30U) | (insn & 0xFU))
-		{
-		case 0x00U: case 0x10U:
-			// 1001 010d dddd 0000		COM Rd
-			r[D5] = R = ~r[D5];
-			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
-			UPDATE_SVN_LOGICAL; UPDATE_Z; SET_C;
-			break;
-		case 0x01U: case 0x11U:
-			// 1001 010d dddd 0001		NEG Rd
-			Rr = r[D5];
-			Rd = 0;
-			r[D5] = R = Rd - Rr;
+		case  1: // 0001 11rd dddd rrrr		ADC Rd,Rr (ROL is ADC Rd,Rd)
+			Rd = r[d = D5];
+			Rr = r[R5];
+			R = Rd + Rr + C;
 			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
-			UPDATE_HC_SUB; UPDATE_SVN_SUB; UPDATE_Z;
+			UPDATE_HC_ADD; UPDATE_SVN_ADD; UPDATE_Z;
+			r[d] = R;
 			break;
-		case 0x02U: case 0x12U:
-			// 1001 010d dddd 0010		SWAP Rd
-			Rd = r[D5];
-			r[D5] = (Rd >> 4) | (Rd << 4);
+
+		case  2: // 0000 11rd dddd rrrr		ADD Rd,Rr (LSL is ADD Rd,Rd)
+			Rd = r[d = D5];
+			Rr = r[R5];
+			R = Rd + Rr;
+			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
+			UPDATE_HC_ADD; UPDATE_SVN_ADD; UPDATE_Z;
+			r[d] = R;
 			break;
-		case 0x03U: case 0x13U:
-			// 1001 010d dddd 0011		INC Rd
-			R = ++r[D5];
-			clr_bits(SREG, SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
-			UPDATE_N;
-			set_bit_inv(SREG,SREG_V,(unsigned int)(R) - 0x80U);
-			UPDATE_S;
-			UPDATE_Z;
-			break;
-		case 0x05U: case 0x15U:
-			// 1001 010d dddd 0101		ASR Rd
-			Rd = r[D5];
-			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
-			set_bit_1(SREG,SREG_C,Rd&1);
-			r[D5] = R = (Rd >> 1) | (Rd & 0x80);
-			UPDATE_N;
-			set_bit_1(SREG,SREG_V,(R>>7)^(Rd&1));
-			UPDATE_S;
-			UPDATE_Z;
-			break;
-		case 0x06U: case 0x16U:
-			// 1001 010d dddd 0110		LSR Rd
-			Rd = r[D5];
-			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
-			set_bit_1(SREG,SREG_C,Rd&1);
-			r[D5] = R = (Rd >> 1);
-			UPDATE_N;
-			set_bit_1(SREG,SREG_V,Rd&1);
-			UPDATE_S;
-			UPDATE_Z;
-			break;
-		case 0x07U: case 0x17U:
-			// 1001 010d dddd 0111		ROR Rd
-			Rd = r[D5];
-			r[D5] = R = (Rd >> 1) | ((SREG&1)<<7);
-			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
-			set_bit_1(SREG,SREG_C,Rd&1);
-			UPDATE_N;
-			set_bit_1(SREG,SREG_V,(R>>7)^(Rd&1));
-			UPDATE_S;
-			UPDATE_Z;
-			break;
-		case 0x0AU: case 0x1AU:
-			// 1001 010d dddd 1010		DEC Rd
-			R = --r[D5];
-			clr_bits(SREG, SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
-			UPDATE_N;
-			set_bit_inv(SREG,SREG_V,(unsigned int)(R) - 0x7FU);
-			UPDATE_S;
-			UPDATE_Z;
-			break;
-		case 0x0CU: case 0x0DU: case 0x1CU: case 0x1DU:
-			// 1001 010k kkkk 110k		JMP k (next word is rest of address)
-			// Note: 64K progmem, so 'k' in first insn word is unused
-			pc = progmem[pc];
-			cycles = 3;
-			break;
-		case 0x0EU: case 0x0FU: case 0x1EU: case 0x1FU:
-			// 1001 010k kkkk 111k		CALL k (next word is rest of address)
-			// Note: 64K progmem, so 'k' in first insn word is unused
-			write_sram(SP,(pc+1));
-			DEC_SP;
-			write_sram(SP,(pc+1)>>8);
-			DEC_SP;
-			pc = progmem[pc];
-			cycles = 4;
-			break;
-		case 0x08U:
-			// 1001 0100 0sss 1000		BSET s (SEC, etc are aliases with sss implicit)
-			// 1001 0100 1sss 1000		BCLR s (CLC, etc are aliases with sss implicit)
-			Rd = (insn >> 4) & 7U;
-			SREG |= (1U << Rd);
-			SREG &= ~(((insn & 0x80U) >> 7) << Rd);
-			break;
-		case 0x09U:
-			// 1001 0100 0000 1001		IJMP (jump thru Z register)
-			pc = Z;
-			cycles = 2;
-			break;
-		case 0x18U:
-			// 1001 0101 0000 1000		RET
-			// 1001 0101 0001 1000		RETI
-			// 1001 0101 1000 1000		SLEEP
-			// 1001 0101 1001 1000		BREAK
-			// 1001 0101 1010 1000		WDR
-			// 1001 0101 1100 1000		LPM (r0 implied, why is this special?)
-			// 1001 0101 1101 1000		ELPM (r0 implied)
-			// 1001 0101 1110 1000		SPM Z (writes R1:R0)
-			switch ((insn >> 4) & 0xFU)
-			{
-			case 0x0U:
-				// 1001 0101 0000 1000		RET
-				INC_SP;
-				pc = read_sram(SP) << 8;
-				INC_SP;
-				pc |= read_sram(SP);
-				cycles = 4;
-				break;
-			case 0x1U:
-				// 1001 0101 0001 1000		RETI
-				INC_SP;
-				pc = read_sram(SP) << 8;
-				INC_SP;
-				pc |= read_sram(SP);
-				cycles = 4;
-				SREG |= (1<<SREG_I);
-				//--interruptLevel;
-				break;
-			case 0x8U:
-				// 1001 0101 1000 1000		SLEEP
-				elapsedCyclesSleep=cycleCounter-lastCyclesSleep;
-				lastCyclesSleep=cycleCounter;
-				break;
-			case 0x9U:
-				// 1001 0101 1001 1000		BREAK
-				// no operation
-				break;
-			case 0xAU:
-				// 1001 0101 1010 1000		WDR
-				//watchdog is based on a RC oscillator
-				//so add some random variation to simulate entropy
-				watchdogTimer=rand()%1024;
-				if(prevWDR){
-					printf("WDR measured %u cycles\n", cycleCounter - prevWDR);
-					prevWDR = 0;
-				}else{
-					prevWDR = cycleCounter + 1;
-				}
-				break;
-			case 0xCU:
-				// 1001 0101 1100 1000		LPM (r0 implied, why is this special?)
-				r0 = read_progmem(Z);
-				cycles = 3;
-				break;
-			case 0xEU:
-				// 1001 0101 1110 1000		SPM Z (writes R1:R0)
-				if (Z >= progSize/2)
-				{
-					fprintf(stderr,"illegal write to progmem addr %x\n",Z);
-					shutdown(1);
-				}else{
-					progmem[Z] = r0 | (r1<<8);
-				}
-				cycles = 4; // undocumented?!?!?
-				break;
-			default:
-				// Illegal op.
-				ILLEGAL_OP;
-				break;
-			}
-			break;
-		case 0x19U:
-			// 1001 0101 0000 1001		ICALL (call thru Z register)
-			write_sram(SP,u8(pc));
-			DEC_SP;
-			write_sram(SP,(pc)>>8);
-			DEC_SP;
-			pc = Z;
-			cycles = 3;
-			break;
-		case 0x20U: case 0x21U: case 0x22U: case 0x23U:
-		case 0x24U: case 0x25U: case 0x26U: case 0x27U:
-		case 0x28U: case 0x29U: case 0x2AU: case 0x2BU:
-		case 0x2CU: case 0x2DU: case 0x2EU: case 0x2FU:
-			// 1001 0110 KKdd KKKK		ADIW Rd+1:Rd,K   (16-bit add to upper four register pairs)
+
+		case  3: // 1001 0110 KKdd KKKK		ADIW Rd+1:Rd,K   (16-bit add to upper four register pairs)
 			Rd = ((insn >> 3) & 0x6) + 24;
 			Rr = ((insn >> 2) & 0x30) | (insn & 0xF);
 			Rd16 = r[Rd] | (r[Rd+1]<<8);
@@ -1644,11 +1162,491 @@ u8 avr8::exec()
 			set_bit_1(SREG,SREG_C,((~R16&Rd16)&0x8000) >> 15);
 			cycles=2;
 			break;
-		case 0x30U: case 0x31U: case 0x32U: case 0x33U:
-		case 0x34U: case 0x35U: case 0x36U: case 0x37U:
-		case 0x38U: case 0x39U: case 0x3AU: case 0x3BU:
-		case 0x3CU: case 0x3DU: case 0x3EU: case 0x3FU:
-			// 1001 0111 KKdd KKKK		SBIW Rd+1:Rd,K
+
+		case  4: // 0010 00rd dddd rrrr		AND Rd,Rr (TST is AND Rd,Rd)
+			Rd = r[d = D5];
+			Rr = r[R5];
+			R = Rd & Rr;
+			clr_bits(SREG, SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
+			UPDATE_SVN_LOGICAL; UPDATE_Z;
+			r[d] = R;
+			break;
+
+		case  5: // 0111 KKKK dddd KKKK		ANDI Rd,K (CBR is ANDI with K complemented)
+			Rd = r[d = D4 + 16];
+			Rr = K8;
+			R = Rd & Rr;
+			clr_bits(SREG, SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
+			UPDATE_SVN_LOGICAL; UPDATE_Z;
+			r[d] = R;
+			break;
+
+		case  6: // 1001 010d dddd 0101		ASR Rd
+			Rd = r[D5];
+			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
+			set_bit_1(SREG,SREG_C,Rd&1);
+			r[D5] = R = (Rd >> 1) | (Rd & 0x80);
+			UPDATE_N;
+			set_bit_1(SREG,SREG_V,(R>>7)^(Rd&1));
+			UPDATE_S;
+			UPDATE_Z;
+			break;
+
+		case  8: // 1111 100d dddd 0bbb		BLD Rd,b
+			Rd = D5;
+			store_bit_1(r[Rd],insn&7,(SREG >> SREG_T) & 1U);
+			break;
+
+		case  7: // 1001 0100 1sss 1000		BCLR s (CLC, etc are aliases with sss implicit)
+			Rd = (insn >> 4) & 7U;
+			SREG &= ~(1U << Rd);
+			break;
+
+		case  9: // 1111 01kk kkkk ksss		BRBC s,k (BRCC, etc are aliases for this with sss implicit)
+			sTmp = k7;
+			if (!(SREG & (1<<(insn&7))))
+			{
+				pc += sTmp;
+				cycles=2;
+			}
+			break;
+
+		case  10: // 1111 00kk kkkk ksss		BRBS s,k (same here)
+			sTmp = k7;
+			if (SREG & (1<<(insn&7)))
+			{
+				pc += sTmp;
+				cycles=2;
+			}
+			break;
+
+		case  11: // 1001 0101 1001 1000		BREAK
+			// no operation
+			break;
+
+		case  12: // 1001 0100 0sss 1000		BSET s (SEC, etc are aliases with sss implicit)
+			Rd = (insn >> 4) & 7U;
+			SREG |= (1U << Rd);
+			break;
+
+		case  13: // 1111 101d dddd 0bbb		BST Rd,b
+			Rd = r[D5];
+			store_bit_1(SREG,SREG_T,(Rd >> (insn&7)) & 1U);
+			break;
+
+		case  14: // 1001 010k kkkk 111k		CALL k (next word is rest of address)
+			// Note: 64K progmem, so 'k' in first insn word is unused
+			write_sram(SP,(pc+1));
+			DEC_SP;
+			write_sram(SP,(pc+1)>>8);
+			DEC_SP;
+			pc = progmem[pc];
+			cycles = 4;
+			break;
+
+		case  15: // 1001 1000 AAAA Abbb		CBI A,b
+			Rd = (insn >> 3) & 31;
+			cycles = 2U; //may be incremented if accessing EEPROM registers
+			write_io(Rd, read_io(Rd) & ~(1<<(insn&7)));
+			break;
+
+		case  16: // 1001 010d dddd 0000		COM Rd
+			r[D5] = R = ~r[D5];
+			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
+			UPDATE_SVN_LOGICAL; UPDATE_Z; SET_C;
+			break;
+
+		case  17: // 0001 01rd dddd rrrr		CP Rd,Rr
+			Rd = r[D5];
+			Rr = r[R5];
+			R = Rd - Rr;
+			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
+			UPDATE_HC_SUB; UPDATE_SVN_SUB; UPDATE_Z;
+			break;
+
+		case  18: // 0000 01rd dddd rrrr		CPC Rd,Rr
+			Rd = r[D5];
+			Rr = r[R5];
+			R = Rd - Rr - C;
+			clr_bits(SREG, SREG_CM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
+			UPDATE_HC_SUB; UPDATE_SVN_SUB; UPDATE_CLEAR_Z;
+			break;
+
+		case  19: // 0011 KKKK dddd KKKK		CPI Rd,K
+			Rd = r[D4 + 16];
+			Rr = K8;
+			R = Rd - Rr;
+			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
+			UPDATE_HC_SUB; UPDATE_SVN_SUB; UPDATE_Z;
+			break;
+
+		case  20: // 0001 00rd dddd rrrr		CPSE Rd,Rr
+			Rd = r[D5];
+			Rr = r[R5];
+			if (Rd == Rr)
+			{
+				uTmp = get_insn_size(progmem[pc]);
+				cycles += uTmp;
+				pc += uTmp;
+			}
+			break;
+
+		case  21: // 1001 010d dddd 1010		DEC Rd
+			R = --r[D5];
+			clr_bits(SREG, SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
+			UPDATE_N;
+			set_bit_inv(SREG,SREG_V,(unsigned int)(R) - 0x7FU);
+			UPDATE_S;
+			UPDATE_Z;
+			break;
+
+		case  22: // 0010 01rd dddd rrrr		EOR Rd,Rr (CLR is EOR Rd,Rd)
+			Rd = r[d = D5];
+			Rr = r[R5];
+			R = Rd ^ Rr;
+			clr_bits(SREG, SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
+			UPDATE_SVN_LOGICAL; UPDATE_Z;
+			r[d] = R;
+			break;
+		
+		case  23: // 0000 0011 0ddd 1rrr		FMUL Rd,Rr (registers are in 16-23 range)
+			Rd = r[D3 + 16];
+			Rr = r[R3 + 16];
+			uTmp = (u8)Rd * (u8)Rr;
+			r0 = (u8)(uTmp << 1);
+			r1 = (u8)(uTmp >> 7);
+			clr_bits(SREG, SREG_CM | SREG_ZM);
+			UPDATE_CZ_MUL(uTmp);
+			cycles=2;
+			break;
+
+		case  24: // 0000 0011 1ddd 0rrr		FMULS Rd,Rr
+			Rd = r[D3 + 16];
+			Rr = r[R3 + 16];
+			sTmp = (s8)Rd * (s8)Rr;
+			r0 = (u8)(sTmp << 1);
+			r1 = (u8)(sTmp >> 7);
+			clr_bits(SREG, SREG_CM | SREG_ZM);
+			UPDATE_CZ_MUL(sTmp);
+			cycles=2;
+			break;
+
+		case  25: // 0000 0011 1ddd 1rrr		FMULSU Rd,Rr
+			Rd = r[D3 + 16];
+			Rr = r[R3 + 16];
+			sTmp = (s8)Rd * (u8)Rr;
+			r0 = (u8)(sTmp << 1);
+			r1 = (u8)(sTmp >> 7);
+			clr_bits(SREG, SREG_CM | SREG_ZM);
+			UPDATE_CZ_MUL(sTmp);
+			cycles=2;
+			break;
+
+		case  26: // 1001 0101 0000 1001		ICALL (call thru Z register)
+			write_sram(SP,u8(pc));
+			DEC_SP;
+			write_sram(SP,(pc)>>8);
+			DEC_SP;
+			pc = Z;
+			cycles = 3;
+			break;
+
+		case  27: // 1001 0100 0000 1001		IJMP (jump thru Z register)
+			pc = Z;
+			cycles = 2;
+			break;
+
+		case  28: // 1011 0AAd dddd AAAA		IN Rd,A
+			Rd = D5;
+			Rr = ((insn >> 5) & 0x30) | (insn & 0xF);
+			r[Rd] = read_io(Rr);
+			break;
+
+		case  29: // 1001 010d dddd 0011		INC Rd
+			R = ++r[D5];
+			clr_bits(SREG, SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
+			UPDATE_N;
+			set_bit_inv(SREG,SREG_V,(unsigned int)(R) - 0x80U);
+			UPDATE_S;
+			UPDATE_Z;
+			break;
+
+		case  30: // 1001 010k kkkk 110k		JMP k (next word is rest of address)
+			// Note: 64K progmem, so 'k' in first insn word is unused
+			pc = progmem[pc];
+			cycles = 3;
+			break;
+
+		case  31: // 1001 000d dddd 1110		LD rd,-X
+			DEC_X;
+			cycles = 2U;
+			r[D5] = read_sram_io(X);
+			break;
+
+		case  32: // 1001 000d dddd 1010		LD Rd,-Y
+			DEC_Y;
+			cycles = 2U;
+			r[D5] = read_sram_io(Y);
+			break;
+
+		case  33: // 1001 000d dddd 0010		LD Rd,-Z
+			DEC_Z;
+			cycles = 2U;
+			r[D5] = read_sram_io(Z);
+			break;
+
+		case  34: // 1001 000d dddd 1100		LD rd,X
+			cycles = 2U;
+			r[D5] = read_sram_io(X);
+			break;
+
+		case  35: // 1001 000d dddd 1101		LD rd,X+
+			cycles = 2U;
+			r[D5] = read_sram_io(X);
+			INC_X;
+			break;
+
+		case  36: // 1001 000d dddd 1001		LD Rd,Y+
+			cycles = 2U;
+			r[D5] = read_sram_io(Y);
+			INC_Y;
+			break;
+
+		case  37: // 10q0 qq0d dddd 1qqq		LDD Rd,Y+q
+			Rd = D5;
+			Rr = (insn & 7U) | ((insn >> 7) & 0x18U) | ((insn >> 8) & 0x20U);
+			cycles = 2U;
+			r[Rd] = read_sram_io(Y + Rr);
+			break;
+
+		case  38: // 1001 000d dddd 0001		LD Rd,Z+
+			cycles = 2U;
+			r[D5] = read_sram_io(Z);
+			INC_Z;
+			break;
+
+		case  39: // 10q0 qq0d dddd 0qqq		LDD Rd,Z+q
+			Rd = D5;
+			Rr = (insn & 7U) | ((insn >> 7) & 0x18U) | ((insn >> 8) & 0x20U);
+			cycles = 2U;
+			r[Rd] = read_sram_io(Z + Rr);
+			break;
+
+		case  40: // 1110 KKKK dddd KKKK		LDI Rd,K (SER is just LDI Rd,255)
+			r[D4 + 16] = K8;
+			break;
+
+		case  41: // 1001 000d dddd 0000		LDS Rd,k (next word is rest of address)
+			cycles = 2U;
+			r[D5] = read_sram_io(progmem[pc++]);
+			break;
+
+		case  42: // 1001 0101 1100 1000		LPM (r0 implied, why is this special?)
+			r0 = read_progmem(Z);
+			cycles = 3;
+			break;
+
+		case  43: // 1001 000d dddd 0100		LPM Rd,Z
+			r[D5] = read_progmem(Z);
+			cycles=3;
+			break;
+
+		case  44: // 1001 000d dddd 0101		LPM Rd,Z+
+			r[D5] = read_progmem(Z);
+			INC_Z;
+			cycles=3;
+			break;
+
+		case  45: // 1001 010d dddd 0110		LSR Rd
+			Rd = r[D5];
+			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
+			set_bit_1(SREG,SREG_C,Rd&1);
+			r[D5] = R = (Rd >> 1);
+			UPDATE_N;
+			set_bit_1(SREG,SREG_V,Rd&1);
+			UPDATE_S;
+			UPDATE_Z;
+			break;
+
+		case  46: // 0010 11rd dddd rrrr		MOV Rd,Rr
+			r[D5]  = r[R5];
+			break;
+
+		case  47: // 0000 0001 dddd rrrr		MOVW Rd+1:Rd,Rr+1:R
+			Rd = D4 << 1;
+			Rr = R4 << 1;
+			r[Rd] = r[Rr];
+			r[Rd+1] = r[Rr+1];
+			break;
+
+		case  48: // 1001 11rd dddd rrrr		MUL Rd,Rr
+			Rd = r[D5];
+			Rr = r[R5];
+			uTmp = Rd * Rr;
+			r0 = (u8)uTmp;
+			r1 = (u8)(uTmp >> 8);
+			clr_bits(SREG, SREG_CM | SREG_ZM);
+			UPDATE_CZ_MUL(uTmp);
+			cycles=2;
+			break;
+
+		case  49: // 0000 0010 dddd rrrr		MULS Rd,Rr
+			Rd = r[D4 + 16];
+			Rr = r[R4 + 16];
+			sTmp = (s8)Rd * (s8)Rr;
+			r0 = (u8)sTmp;
+			r1 = (u8)(sTmp >> 8);
+			clr_bits(SREG, SREG_CM | SREG_ZM);
+			UPDATE_CZ_MUL(sTmp);
+			cycles=2;
+			break;
+
+		case  50: // 0000 0011 0ddd 0rrr		MULSU Rd,Rr (registers are in 16-23 range)
+			Rd = r[D3 + 16];
+			Rr = r[R3 + 16];
+			sTmp = (s8)Rd * (u8)Rr;
+			r0 = (u8)sTmp;
+			r1 = (u8)(sTmp >> 8);
+			clr_bits(SREG, SREG_CM | SREG_ZM);
+			UPDATE_CZ_MUL(sTmp);
+			cycles=2;
+			break;
+
+		case  51: // 1001 010d dddd 0001		NEG Rd
+			Rr = r[D5];
+			Rd = 0;
+			r[D5] = R = Rd - Rr;
+			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
+			UPDATE_HC_SUB; UPDATE_SVN_SUB; UPDATE_Z;
+			break;
+
+		case  52: // 0000 0000 0000 0000		NOP
+			break;
+
+		case  53: // 0010 10rd dddd rrrr		OR Rd,Rr
+			Rd = r[d = D5];
+			Rr = r[R5];
+			R = Rd | Rr;
+			clr_bits(SREG, SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
+			UPDATE_SVN_LOGICAL; UPDATE_Z;
+			r[d] = R;
+			break;
+
+		case  54: // 0110 KKKK dddd KKKK		ORI Rd,K (same as SBR insn)
+			Rd = r[d = D4 + 16];
+			Rr = K8;
+			R = Rd | Rr;
+			clr_bits(SREG, SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
+			UPDATE_SVN_LOGICAL; UPDATE_Z;
+			r[d] = R;
+			break;
+
+		case  55: // 1011 1AAd dddd AAAA		OUT A,Rd
+			Rd = D5;
+			Rr = ((insn >> 5) & 0x30) | (insn & 0xF);
+			write_io(Rr,r[Rd]);
+			break;
+
+		case  56: // 1001 000d dddd 1111		POP Rd
+			INC_SP;
+			cycles = 2U;
+			r[D5] = read_sram(SP);
+			break;
+
+		case  57: // 1001 001d dddd 1111		PUSH Rd
+			cycles = 2U;
+			write_sram(SP,r[D5]);
+			DEC_SP;
+			break;
+
+		case  58: // 1101 kkkk kkkk kkkk		RCALL k
+			write_sram(SP,(u8)pc);
+			DEC_SP;
+			write_sram(SP,pc>>8);
+			DEC_SP;
+			pc += k12;
+			cycles=3;
+			break;
+
+		case  59: // 1001 0101 0000 1000		RET
+			INC_SP;
+			pc = read_sram(SP) << 8;
+			INC_SP;
+			pc |= read_sram(SP);
+			cycles = 4;
+			break;
+
+		case  60: // 1001 0101 0001 1000		RETI
+			INC_SP;
+			pc = read_sram(SP) << 8;
+			INC_SP;
+			pc |= read_sram(SP);
+			cycles = 4;
+			SREG |= (1<<SREG_I);
+			//--interruptLevel;
+			break;
+
+		case  61: // 1100 kkkk kkkk kkkk		RJMP k
+			pc += k12;
+			cycles=2;
+			break;
+
+		case  62: // 1001 010d dddd 0111		ROR Rd
+			Rd = r[D5];
+			r[D5] = R = (Rd >> 1) | ((SREG&1)<<7);
+			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
+			set_bit_1(SREG,SREG_C,Rd&1);
+			UPDATE_N;
+			set_bit_1(SREG,SREG_V,(R>>7)^(Rd&1));
+			UPDATE_S;
+			UPDATE_Z;
+			break;
+
+		case  63: // 0000 10rd dddd rrrr		SBC Rd,Rr
+			Rd = r[d = D5];
+			Rr = r[R5];
+			R = Rd - Rr - C;
+			clr_bits(SREG, SREG_CM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
+			UPDATE_HC_SUB; UPDATE_SVN_SUB; UPDATE_CLEAR_Z;
+			r[d] = R;
+			break;
+
+		case  64: // 0100 KKKK dddd KKKK		SBCI Rd,K
+			Rd = r[d = D4 + 16];
+			Rr = K8;
+			R = Rd - Rr - C;
+			clr_bits(SREG, SREG_CM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
+			UPDATE_HC_SUB; UPDATE_SVN_SUB; UPDATE_CLEAR_Z;
+			r[d] = R;
+			break;
+
+		case  65: // 1001 1010 AAAA Abbb		SBI A,b
+			Rd = (insn >> 3) & 31;
+			cycles = 2U; //may be incremented if accessing EEPROM registers
+			write_io(Rd, read_io(Rd) | (1<<(insn&7)));
+			break;
+
+		case  66: // 1001 1001 AAAA Abbb		SBIC A,b
+			Rd = (insn >> 3) & 31;
+			if (!(read_io(Rd) & (1<<(insn&7))))
+			{
+				uTmp = get_insn_size(progmem[pc]);
+				cycles += uTmp;
+				pc += uTmp;
+			}
+			break;
+
+		case  67: // 1001 1011 AAAA Abbb		SBIS A,b
+			Rd = (insn >> 3) & 31;
+			if (read_io(Rd) & (1<<(insn&7)))
+			{
+				uTmp = get_insn_size(progmem[pc]);
+				cycles += uTmp;
+				pc += uTmp;
+			}
+			break;
+
+		case  68: // 1001 0111 KKdd KKKK		SBIW Rd+1:Rd,K
 			Rd = ((insn >> 3) & 0x6) + 24;
 			Rr = ((insn >> 2) & 0x30) | (insn & 0xF);
 			Rd16 = r[Rd] | (r[Rd+1]<<8);
@@ -1663,147 +1661,140 @@ u8 avr8::exec()
 			set_bit_1(SREG,SREG_C,((R16&~Rd16)&0x8000) >> 15);
 			cycles=2;
 			break;
-		default:
-			// Illegal op.
-			ILLEGAL_OP;
-			break;
-		}
-		break;
 
-	case 0x26U:
-		// 1001 1000 AAAA Abbb		CBI A,b
-		// 1001 1001 AAAA Abbb		SBIC A,b
-		// 1001 1010 AAAA Abbb		SBI A,b
-		// 1001 1011 AAAA Abbb		SBIS A,b
-		switch ((insn >> 8) & 3U)
-		{
-		case 0U:
-			// 1001 1000 AAAA Abbb		CBI A,b
-			Rd = (insn >> 3) & 31;
-			cycles = 2U; //may be incremented if accessing EEPROM registers
-			write_io(Rd, read_io(Rd) & ~(1<<(insn&7)));
-			break;
-		case 1U:
-			// 1001 1001 AAAA Abbb		SBIC A,b
-			Rd = (insn >> 3) & 31;
-			if (!(read_io(Rd) & (1<<(insn&7))))
-			{
-				uTmp = get_insn_size(progmem[pc]);
-				cycles += uTmp;
-				pc += uTmp;
-			}
-			break;
-		case 2U:
-			// 1001 1010 AAAA Abbb		SBI A,b
-			Rd = (insn >> 3) & 31;
-			cycles = 2U; //may be incremented if accessing EEPROM registers
-			write_io(Rd, read_io(Rd) | (1<<(insn&7)));
-			break;
-		default:
-			// 1001 1011 AAAA Abbb		SBIS A,b
-			Rd = (insn >> 3) & 31;
-			if (read_io(Rd) & (1<<(insn&7)))
-			{
-				uTmp = get_insn_size(progmem[pc]);
-				cycles += uTmp;
-				pc += uTmp;
-			}
-			break;
-		}
-		break;
-
-	case 0x27U:
-		// 1001 11rd dddd rrrr		MUL Rd,Rr
-		Rd = r[D5];
-		Rr = r[R5];
-		uTmp = Rd * Rr; 
-		r0 = (u8)uTmp; 
-		r1 = (u8)(uTmp >> 8);
-		clr_bits(SREG, SREG_CM | SREG_ZM);
-		UPDATE_CZ_MUL(uTmp);
-		cycles=2;
-		break;
-
-	case 0x2CU: case 0x2DU:
-		// 1011 0AAd dddd AAAA		IN Rd,A
-		Rd = D5;
-		Rr = ((insn >> 5) & 0x30) | (insn & 0xF);
-		r[Rd] = read_io(Rr);
-		break;
-
-	case 0x2EU: case 0x2FU:
-		// 1011 1AAd dddd AAAA		OUT A,Rd
-		Rd = D5;
-		Rr = ((insn >> 5) & 0x30) | (insn & 0xF);
-		write_io(Rr,r[Rd]);
-		break;
-
-	case 0x30U: case 0x31U: case 0x32U: case 0x33U:
-		// 1100 kkkk kkkk kkkk		RJMP k
-		pc += k12;
-		cycles=2;
-		break;
-
-	case 0x34U: case 0x35U: case 0x36U: case 0x37U:
-		// 1101 kkkk kkkk kkkk		RCALL k
-		write_sram(SP,(u8)pc);
-		DEC_SP;
-		write_sram(SP,pc>>8);
-		DEC_SP;
-		pc += k12;
-		cycles=3;
-		break;
-
-	case 0x38U: case 0x39U: case 0x3AU: case 0x3BU:
-		// 1110 KKKK dddd KKKK		LDI Rd,K (SER is just LDI Rd,255)
-		r[D4 + 16] = K8;
-		break;
-
-	case 0x3CU:
-		// 1111 00kk kkkk ksss		BRBS s,k (same here)
-		sTmp = k7;
-		if (SREG & (1<<(insn&7)))
-		{
-			pc += sTmp;
-			cycles=2;
-		}
-		break;
-
-	case 0x3DU:
-		// 1111 01kk kkkk ksss		BRBC s,k (BRCC, etc are aliases for this with sss implicit)
-		sTmp = k7;
-		if (!(SREG & (1<<(insn&7))))
-		{
-			pc += sTmp;
-			cycles=2;
-		}
-		break;
-
-	case 0x3EU:
-		// 1111 100d dddd 0bbb		BLD Rd,b
-		// 1111 101d dddd 0bbb		BST Rd,b
-		if ((insn & 0x0200U) == 0U)
-		{      // BLD
-			Rd = D5;
-			store_bit_1(r[Rd],insn&7,(SREG >> SREG_T) & 1U);
-		}else{ // BST
+		case  69: // 1111 110r rrrr 0bbb		SBRC Rr,b
 			Rd = r[D5];
-			store_bit_1(SREG,SREG_T,(Rd >> (insn&7)) & 1U);
-		}
-		break;
+			if (((Rd >> (insn & 7U)) & 1U) == 0)
+			{
+				uTmp = get_insn_size(progmem[pc]);
+				cycles += uTmp;
+				pc += uTmp;
+			}
+			break;
 
-	default:
-		// 1111 110r rrrr 0bbb		SBRC Rr,b
-		// 1111 111r rrrr 0bbb		SBRS Rr,b
-		Rd = r[D5];
-		if (((Rd >> (insn & 7U)) & 1U) == ((insn & 0x0200U) >> 9))
-		{
-			uTmp = get_insn_size(progmem[pc]);
-			cycles += uTmp;
-			pc += uTmp;
-		}
-		break;
+		case  70: // 1111 111r rrrr 0bbb		SBRS Rr,b
+			Rd = r[D5];
+			if (((Rd >> (insn & 7U)) & 1U) == 1)
+			{
+				uTmp = get_insn_size(progmem[pc]);
+				cycles += uTmp;
+				pc += uTmp;
+			}
+			break;
+
+		case  71: // 1001 0101 1000 1000		SLEEP
+			elapsedCyclesSleep=cycleCounter-lastCyclesSleep;
+			lastCyclesSleep=cycleCounter;
+			break;
+
+		case  72: // 1001 0101 1110 1000		SPM Z (writes R1:R0)
+			if (Z >= progSize/2)
+			{
+				fprintf(stderr,"illegal write to progmem addr %x\n",Z);
+				shutdown(1);
+				}else{
+				progmem[Z] = r0 | (r1<<8);
+			}
+			cycles = 4; // undocumented?!?!?
+			break;
+
+		case  73: // 1001 001r rrrr 1110		ST -X,Rr
+			DEC_X;
+			cycles = 2U;
+			write_sram_io(X,r[D5]);
+			break;
+
+		case  74: // 1001 001r rrrr 1010		ST -Y,Rr
+			DEC_Y;
+			cycles = 2U;
+			write_sram_io(Y,r[D5]);
+			break;
+
+		case  75: // 1001 001r rrrr 0010		ST -Z,Rr
+			DEC_Z;
+			cycles = 2U;
+			write_sram_io(Z,r[D5]);
+			break;
+
+		case  76: // 1001 001r rrrr 1100		ST X,Rr
+			cycles = 2U;
+			write_sram_io(X,r[D5]);
+			break;
+
+		case  77: // 1001 001r rrrr 1101		ST X+,Rr
+			cycles = 2U;
+			write_sram_io(X,r[D5]);
+			INC_X;
+			break;
+
+		case  78: // 1001 001r rrrr 1001		ST Y+,Rr
+			cycles = 2U;
+			write_sram_io(Y,r[D5]);
+			INC_Y;
+			break;
+
+		case  79: // 10q0 qq1d dddd 1qqq		STD Y+q,Rd
+			Rd = D5;
+			Rr = (insn & 7U) | ((insn >> 7) & 0x18U) | ((insn >> 8) & 0x20U);
+			cycles = 2U;
+			write_sram_io(Y + Rr, r[Rd]);
+			break;
+
+		case  80: // 1001 001r rrrr 0001		ST Z+,Rr
+			cycles = 2U;
+			write_sram_io(Z,r[D5]);
+			INC_Z;
+			break;
+
+		case  81: // 10q0 qq1d dddd 0qqq		STD Z+q,Rd
+			Rd = D5;
+			Rr = (insn & 7U) | ((insn >> 7) & 0x18U) | ((insn >> 8) & 0x20U);
+			cycles = 2U;
+			write_sram_io(Z + Rr, r[Rd]);
+			break;
+
+		case  82: // 1001 001d dddd 0000		STS k,Rr (next word is rest of address)
+			cycles = 2U;
+			write_sram_io(progmem[pc++],r[D5]);
+			break;
+
+		case  83: // 0001 10rd dddd rrrr		SUB Rd,Rr
+			Rd = r[d = D5];
+			Rr = r[R5];
+			R = Rd - Rr;
+			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
+			UPDATE_HC_SUB; UPDATE_SVN_SUB; UPDATE_Z;
+			r[d] = R;
+			break;
+
+		case  84: // 0101 KKKK dddd KKKK		SUBI Rd,K
+			Rd = r[d = D4 + 16];
+			Rr = K8;
+			R = Rd - Rr;
+			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
+			UPDATE_HC_SUB; UPDATE_SVN_SUB; UPDATE_Z;
+			r[d] = R;
+			break;
+
+		case  85: // 1001 010d dddd 0010		SWAP Rd
+			Rd = r[D5];
+			r[D5] = (Rd >> 4) | (Rd << 4);
+			break;
+
+		case  86: // 1001 0101 1010 1000		WDR
+			//watchdog is based on a RC oscillator
+			//so add some random variation to simulate entropy
+			watchdogTimer=rand()%1024;
+			if(prevWDR){
+				printf("WDR measured %u cycles\n", cycleCounter - prevWDR);
+				prevWDR = 0;
+				}else{
+				prevWDR = cycleCounter + 1;
+			}
+			break;
+
 	}
+
 
 	if(cycles != 0U){
 		update_hardware(cycles);
@@ -1811,6 +1802,63 @@ u8 avr8::exec()
 
 	return cycles;
 }
+
+
+u16 avr8::decodeArg(u16 flash, u16 argMask){
+
+	u16 argMaskShift = 0x0001;
+	u16 decodeShift = 0x0001;
+	u16 arg = 0x0000;
+
+	while (argMaskShift != 0x4000){  //0x4000 is highest bit in argMask that can be set
+		if((argMaskShift & argMask) != 0){
+			if((argMaskShift & flash) != 0){
+				arg = arg | decodeShift;
+			}
+			decodeShift = decodeShift << 1 ;
+		}
+		argMaskShift = argMaskShift<<1;
+	}
+	return(arg);
+}
+
+u32 avr8::instructionDecode(u16 rawFlash){
+
+	int i = 0;
+	u16 thisMask;
+	u16 arg1;
+	u16 arg2;
+
+	while(instructionList[i].opNum != 0){
+		thisMask = ~(instructionList[i].arg1Mask | instructionList[i].arg2Mask);
+
+		if((rawFlash & thisMask) == instructionList[i].mask){
+
+			arg1 = (decodeArg(rawFlash, instructionList[i].arg1Mask) * instructionList[i].arg1Mul) + instructionList[i].arg1Offset;
+			arg2 = (decodeArg(rawFlash, instructionList[i].arg2Mask) * instructionList[i].arg2Mul) + instructionList[i].arg2Offset;
+
+			//fprintf(stdout, instructionList[i].opName, arg1, arg2);
+			//fprintf(stdout, "\n");
+			
+			return((arg2<<16) + (arg1<<8) + (instructionList[i].opNum));
+		}
+		i++;
+	}
+	return(0);
+}
+
+void avr8::decodeFlash(void){
+	for(u16 i=0; i<(progSize/2); i++){
+		decodeFlash(i);
+	}
+}
+void avr8::decodeFlash(u16 address){
+	
+	if (address < (progSize/2)) {
+		progmemDecoded[address] = instructionDecode(progmem[address]);
+	}
+}
+
 
 
 void avr8::trigger_interrupt(unsigned int location)

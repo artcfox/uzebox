@@ -325,12 +325,14 @@ struct avr8
 		memset(io, 0, sizeof(io));
 		memset(sram, 0, sizeof(sram));
 		memset(eeprom, 0, sizeof(eeprom));
-		memset(progmem,0,progSize);
+		memset(progmem,0,progSize/2);
+		memset(progmemDecoded,0,progSize/2);
 		memset(romName,0,sizeof(romName));
 	}
 
 	/*Core*/
 	u16 progmem[progSize/2];
+	u32 progmemDecoded[progSize/2];
 	u16 pc,currentPc;
 	unsigned int cycleCounter;
 private:
@@ -350,6 +352,10 @@ public:
     bool hsyncHelp;
     bool recordMovie;
 	char romName[256];
+	u16 decodeArg(u16 flash, u16 argMask);
+	u32 instructionDecode(u16 rawFlash);
+	void decodeFlash(void);
+	void decodeFlash(u16 address);
 
 	struct
 	{
