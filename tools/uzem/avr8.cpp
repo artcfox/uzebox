@@ -1059,14 +1059,14 @@ u8 avr8::exec()
 
 	currentPc=pc;
 	const instructionDecode_t insnDecoded = progmemDecoded[pc];
-	const u8  opNum  = insnDecoded.opNum;
-	const u8  arg1_8 = insnDecoded.arg1;
-	const s16 arg2_8 = insnDecoded.arg2;
+	const u32  opNum  = insnDecoded.opNum;
+	const u32  arg1_8 = insnDecoded.arg1;
+	const s32 arg2_8 = insnDecoded.arg2;
 
 	cycles = 1;				// Most insns run in one cycle, so assume that
-	u8 Rd, Rr, R, CH;
-	u16 uTmp, Rd16, R16;
-	s16 sTmp;
+	u32 Rd, Rr, R, CH;
+	u32 uTmp, Rd16, R16;
+	s32 sTmp;
 
 	//GDB must be first
 	if (enableGdb == true)
