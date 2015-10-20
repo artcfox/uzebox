@@ -217,7 +217,7 @@ inline static void store_bit_1(u8 &dest, unsigned int bit, unsigned int value)
 
 #define SET_C		(SREG |= (1<<SREG_C))
 
-#define ILLEGAL_OP fprintf(stderr,"invalid insn %x\n",insn); shutdown(1);
+#define ILLEGAL_OP fprintf(stderr,"invalid insn at address %x\n",currentPc); shutdown(1);
 
 #if defined(_DEBUG)
 #define DISASM 1
@@ -1056,7 +1056,6 @@ u8 avr8::exec()
 {
 
 	currentPc=pc;
-	const unsigned int insn = progmem[pc];
 	const instructionDecode_t insnDecoded = progmemDecoded[pc];
 	cycles = 1;				// Most insns run in one cycle, so assume that
 	u8 Rd, Rr, R, d, CH;
@@ -1178,7 +1177,7 @@ u8 avr8::exec()
 
 		case  8: // 1111 100d dddd 0bbb		BLD Rd,b
 			Rd = arg1_8;
-			store_bit_1(r[Rd],insn&7,(SREG >> SREG_T) & 1U);
+			store_bit_1(r[Rd],arg2_8,(SREG >> SREG_T) & 1U);
 			break;
 
 		case  7: // 1001 0100 1sss 1000		BCLR s (CLC, etc are aliases with sss implicit)
