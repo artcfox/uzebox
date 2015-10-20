@@ -1223,7 +1223,7 @@ u8 avr8::exec()
 			DEC_SP;
 			write_sram(SP,(pc+1)>>8);
 			DEC_SP;
-			pc = progmem[pc];
+			pc = arg2_8;
 			cycles = 4;
 			break;
 
@@ -1356,7 +1356,7 @@ u8 avr8::exec()
 
 		case  30: // 1001 010k kkkk 110k		JMP k (next word is rest of address)
 			// Note: 64K progmem, so 'k' in first insn word is unused
-			pc = progmem[pc];
+			pc = arg2_8;
 			cycles = 3;
 			break;
 
@@ -1421,7 +1421,8 @@ u8 avr8::exec()
 
 		case  41: // 1001 000d dddd 0000		LDS Rd,k (next word is rest of address)
 			cycles = 2U;
-			r[arg1_8] = read_sram_io(progmem[pc++]);
+			r[arg1_8] = read_sram_io(arg2_8);
+			pc++;
 			break;
 
 		case  42: // 1001 0101 1100 1000		LPM (r0 implied, why is this special?)
@@ -1677,6 +1678,7 @@ u8 avr8::exec()
 				shutdown(1);
 			}else{
 				progmem[Z] = r0 | (r1<<8);
+				decodeFlash(Z-1);
 				decodeFlash(Z);
 			}
 			cycles = 4; // undocumented?!?!?
@@ -1739,7 +1741,8 @@ u8 avr8::exec()
 
 		case  82: // 1001 001d dddd 0000		STS k,Rr (next word is rest of address)
 			cycles = 2U;
-			write_sram_io(progmem[pc++],r[arg1_8]);
+			write_sram_io(arg2_8,r[arg1_8]);
+			pc++;
 			break;
 
 		case  83: // 0001 10rd dddd rrrr		SUB Rd,Rr
@@ -1818,12 +1821,15 @@ u16 avr8::decodeArg(u16 flash, u16 argMask, u8 argNeg){
 	return(arg);
 }
 
-instructionDecode_t avr8::instructionDecode(u16 rawFlash){
+void avr8::instructionDecode(u16 address){
 
 	int i = 0;
+	u16 rawFlash;
 	u16 thisMask;
 	u16 arg1;
 	u16 arg2;
+
+	rawFlash = progmem[address];
 
 	instructionDecode_t thisInst;
 
@@ -1839,18 +1845,23 @@ instructionDecode_t avr8::instructionDecode(u16 rawFlash){
 			arg1 = (decodeArg(rawFlash, instructionList[i].arg1Mask, instructionList[i].arg1Neg) * instructionList[i].arg1Mul) + instructionList[i].arg1Offset;
 			arg2 = (decodeArg(rawFlash, instructionList[i].arg2Mask, instructionList[i].arg2Neg) * instructionList[i].arg2Mul) + instructionList[i].arg2Offset;
 
+			if (instructionList[i].words == 2) { // the 2 word instructions have k16 as the 2nd word of total 32bit instruction
+				arg2 = progmem[address+1];
+			}
+
 			//fprintf(stdout, instructionList[i].opName, arg1, arg2);
 			//fprintf(stdout, "\n");
 
 			thisInst.opNum = instructionList[i].opNum;
 			thisInst.arg1  = arg1;
 			thisInst.arg2  = arg2;
-						
-			return(thisInst);
+					
+			progmemDecoded[address] = thisInst;	
+			return;
 		}
 		i++;
 	}
-	return(thisInst);
+	return;
 }
 
 void avr8::decodeFlash(void){
@@ -1861,7 +1872,7 @@ void avr8::decodeFlash(void){
 void avr8::decodeFlash(u16 address){
 	
 	if (address < (progSize/2)) {
-		progmemDecoded[address] = instructionDecode(progmem[address]);
+		instructionDecode(address);
 	}
 }
 
