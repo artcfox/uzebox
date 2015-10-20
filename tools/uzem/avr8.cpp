@@ -120,6 +120,7 @@ static const char* joySettingsFilename = "joystick-settings";
 
 #define SD_ENABLED() SDpath
 
+/*
 #define D3	((insn >> 4) & 7)
 #define R3	(insn & 7)
 #define D4	((insn >> 4) & 15)
@@ -129,6 +130,7 @@ static const char* joySettingsFilename = "joystick-settings";
 #define K8	(((insn >> 4) & 0xF0) | (insn & 0xF))
 #define k7	((s16)(insn<<6)>>9)
 #define k12	((s16)(insn<<4)>>4)
+*/
 
 #define BIT(x,b)	(((x)>>(b))&1)
 #define C			BIT(SREG,SREG_C)
@@ -1057,8 +1059,12 @@ u8 avr8::exec()
 
 	currentPc=pc;
 	const instructionDecode_t insnDecoded = progmemDecoded[pc];
+	const u8  opNum  = insnDecoded.opNum;
+	const u8  arg1_8 = insnDecoded.arg1;
+	const s16 arg2_8 = insnDecoded.arg2;
+
 	cycles = 1;				// Most insns run in one cycle, so assume that
-	u8 Rd, Rr, R, d, CH;
+	u8 Rd, Rr, R, CH;
 	u16 uTmp, Rd16, R16;
 	s16 sTmp;
 
@@ -1105,10 +1111,6 @@ u8 avr8::exec()
 	// be buggy then (the behavior of things like having the stack over IO
 	// area...). This solution is at least fast for these instructions.
 
-	
-	u8  opNum  = insnDecoded.opNum;
-	u8  arg1_8 = insnDecoded.arg1;
-	s16 arg2_8 = insnDecoded.arg2;
 	
 	switch (opNum){
 
@@ -1186,19 +1188,17 @@ u8 avr8::exec()
 			break;
 
 		case  9: // 1111 01kk kkkk ksss		BRBC s,k (BRCC, etc are aliases for this with sss implicit)
-			sTmp = arg2_8;
 			if (!(SREG & (1<<(arg1_8))))
 			{
-				pc += sTmp;
+				pc += arg2_8;
 				cycles=2;
 			}
 			break;
 
 		case  10: // 1111 00kk kkkk ksss		BRBS s,k (same here)
-			sTmp = arg2_8;
 			if (SREG & (1<<(arg1_8)))
 			{
-				pc += sTmp;
+				pc += arg2_8;
 				cycles=2;
 			}
 			break;

@@ -618,7 +618,7 @@ private:
 		1001 010k kkkk 111k		CALL k (next word is rest of address) */
 		// This code is simplified by assuming upper k bits are zero on 644
 		
-		if (insn == 142 || insn == 148 || insn == 169 || insn == 210) {
+		if (insn == 14 || insn == 20 || insn == 41 || insn == 82) {
 			return 2;
 		} else {
 			return 1;
