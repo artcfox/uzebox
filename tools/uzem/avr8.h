@@ -170,11 +170,11 @@ typedef int16_t s16;
 typedef uint32_t u32;
 typedef int32_t s32;
 
-typedef struct __attribute__((packed)) {
-	u16  arg2;
+typedef struct {
+	s16  arg2;
 	u8   arg1;
 	u8   opNum;
-} instructionDecode_t;
+} __attribute__((packed)) instructionDecode_t;
 
 typedef struct {
 	u8   opNum;
@@ -610,18 +610,19 @@ private:
 		}
 	}
 
-	inline static int get_insn_size(unsigned int insn)
+	inline static int get_insn_size(u8 insn)
 	{
 		/*	1001 000d dddd 0000		LDS Rd,k (next word is rest of address)
 		1001 001d dddd 0000		STS k,Rr (next word is rest of address)
 		1001 010k kkkk 110k		JMP k (next word is rest of address)
 		1001 010k kkkk 111k		CALL k (next word is rest of address) */
 		// This code is simplified by assuming upper k bits are zero on 644
-		insn &= 0xFE0F;
-		if (insn == 0x9000 || insn == 0x9200 || insn == 0x940C || insn == 0x940E)
+		
+		if (insn == 142 || insn == 148 || insn == 169 || insn == 210) {
 			return 2;
-		else
+		} else {
 			return 1;
+		}
 	}
 
 public:

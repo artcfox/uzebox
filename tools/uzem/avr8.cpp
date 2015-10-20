@@ -973,7 +973,7 @@ instructionList_t instructionList[] = {
 {  11,"BREAK "                         ,   0,   1,   0,   0,   0,   1,   0,   0,   1,   1, 0b1001010110011000, 0b0000000000000000, 0b0000000000000000},
 {  12,"BSET   %d "                     ,   7,   1,   0,   0,   0,   1,   0,   0,   1,   1, 0b1001010000001000, 0b0000000001110000, 0b0000000000000000},
 {  13,"BST    r%d, %d "                ,   1,   1,   0,   0,   6,   1,   0,   0,   1,   1, 0b1111101000000000, 0b0000000111110000, 0b0000000000000111},
-{ 142,"CALL   %d (+ next word) "       ,   0,   1,   0,   0,   3,   1,   0,   0,   2,   4, 0b1001010000001110, 0b0000000000000000, 0b0000000111110001},
+{  14,"CALL   %d (+ next word) "       ,   0,   1,   0,   0,   3,   1,   0,   0,   2,   4, 0b1001010000001110, 0b0000000000000000, 0b0000000111110001},
 {  15,"CBI    io%d, %d "               ,   8,   1,   0,   0,   6,   1,   0,   0,   1,   2, 0b1001100000000000, 0b0000000011111000, 0b0000000000000111},
 {  16,"COM    r%d "                    ,   1,   1,   0,   0,   0,   1,   0,   0,   1,   1, 0b1001010000000000, 0b0000000111110000, 0b0000000000000000},
 {  17,"CP     r%d, r%d "               ,   1,   1,   0,   0,   2,   1,   0,   0,   1,   1, 0b0001010000000000, 0b0000000111110000, 0b0000001000001111},
@@ -989,7 +989,7 @@ instructionList_t instructionList[] = {
 {  27,"IJMP "                          ,   0,   1,   0,   0,   0,   1,   0,   0,   1,   2, 0b1001010000001001, 0b0000000000000000, 0b0000000000000000},
 {  28,"IN     r%d, io%d "              ,   1,   1,   0,   0,   8,   1,   0,   0,   1,   1, 0b1011000000000000, 0b0000000111110000, 0b0000011000001111},
 {  29,"INC    r%d "                    ,   1,   1,   0,   0,   0,   1,   0,   0,   1,   1, 0b1001010000000011, 0b0000000111110000, 0b0000000000000000},
-{ 158,"JMP    %d (+ next word) "       ,   0,   1,   0,   0,   3,   1,   0,   0,   2,   3, 0b1001010000001100, 0b0000000000000000, 0b0000000111110001},
+{  30,"JMP    %d (+ next word) "       ,   0,   1,   0,   0,   3,   1,   0,   0,   2,   3, 0b1001010000001100, 0b0000000000000000, 0b0000000111110001},
 {  31,"LD     r%d, -X "                ,   1,   1,   0,   0,   0,   1,   0,   0,   1,   3, 0b1001000000001110, 0b0000000111110000, 0b0000000000000000},
 {  32,"LD     r%d, -Y "                ,   1,   1,   0,   0,   0,   1,   0,   0,   1,   3, 0b1001000000001010, 0b0000000111110000, 0b0000000000000000},
 {  33,"LD     r%d, -Z "                ,   1,   1,   0,   0,   0,   1,   0,   0,   1,   3, 0b1001000000000010, 0b0000000111110000, 0b0000000000000000},
@@ -1000,7 +1000,7 @@ instructionList_t instructionList[] = {
 {  38,"LD     r%d, Z+ "                ,   1,   1,   0,   0,   0,   1,   0,   0,   1,   3, 0b1001000000000001, 0b0000000111110000, 0b0000000000000000},
 {  39,"LD     r%d, Z+%d "              ,   1,   1,   0,   0,   5,   1,   0,   0,   1,   3, 0b1000000000000000, 0b0000000111110000, 0b0010110000000111},
 {  40,"LDI    r%d, %d "                ,   1,   1,  16,   0,   3,   1,   0,   0,   1,   1, 0b1110000000000000, 0b0000000011110000, 0b0000111100001111},
-{ 169,"LDS    r%d, %d (+next word) "   ,   1,   1,   0,   0,   0,   1,   0,   0,   2,   2, 0b1001000000000000, 0b0000000111110000, 0b0000000000000000},
+{  41,"LDS    r%d, %d (+next word) "   ,   1,   1,   0,   0,   0,   1,   0,   0,   2,   2, 0b1001000000000000, 0b0000000111110000, 0b0000000000000000},
 {  42,"LPM "                           ,   0,   1,   0,   0,   0,   1,   0,   0,   1,   3, 0b1001010111001000, 0b0000000000000000, 0b0000000000000000},
 {  43,"LPM    r%d, Z "                 ,   1,   1,   0,   0,   0,   1,   0,   0,   1,   3, 0b1001000000000100, 0b0000000111110000, 0b0000000000000000},
 {  44,"LPM    r%d, Z+ "                ,   1,   1,   0,   0,   0,   1,   0,   0,   1,   3, 0b1001000000000101, 0b0000000111110000, 0b0000000000000000},
@@ -1041,7 +1041,7 @@ instructionList_t instructionList[] = {
 {  79,"ST     y+q, r%d (q=%d) "        ,   1,   1,   0,   0,   5,   1,   0,   0,   1,   2, 0b1000001000001000, 0b0000000111110000, 0b0010110000000111},
 {  80,"ST     z+, r%d "                ,   2,   1,   0,   0,   0,   1,   0,   0,   1,   2, 0b1001001000000001, 0b0000000111110000, 0b0000000000000000},
 {  81,"ST     z+q, r%d (q=%d) "        ,   1,   1,   0,   0,   5,   1,   0,   0,   1,   2, 0b1000001000000000, 0b0000000111110000, 0b0010110000000111},
-{ 210,"STS    k, r%d "                 ,   1,   1,   0,   0,   0,   1,   0,   0,   2,   2, 0b1001001000000000, 0b0000000111110000, 0b0000000000000000},
+{  82,"STS    k, r%d "                 ,   1,   1,   0,   0,   0,   1,   0,   0,   2,   2, 0b1001001000000000, 0b0000000111110000, 0b0000000000000000},
 {  83,"SUB    r%d, r%d "               ,   1,   1,   0,   0,   2,   1,   0,   0,   1,   1, 0b0001100000000000, 0b0000000111110000, 0b0000001000001111},
 {  84,"SUBI   r%d, %d "                ,   1,   1,  16,   0,   3,   1,   0,   0,   1,   1, 0b0101000000000000, 0b0000000011110000, 0b0000111100001111},
 {  85,"SWAP   r%d "                    ,   1,   1,   0,   0,   0,   1,   0,   0,   1,   1, 0b1001010000000010, 0b0000000111110000, 0b0000000000000000},
@@ -1106,29 +1106,29 @@ u8 avr8::exec()
 	// be buggy then (the behavior of things like having the stack over IO
 	// area...). This solution is at least fast for these instructions.
 
-	#define arg1_8   ((u8)(insnDecoded.arg1))
-	#define arg2_8   ((u8)(insnDecoded.arg2))
-
-	switch (insnDecoded.opNum & 0x0000007F){
-
-		//return((arg2<<16) + (arg1<<8) + (instructionList[i].opNum));
+	
+	u8  opNum  = insnDecoded.opNum;
+	u8  arg1_8 = insnDecoded.arg1;
+	s16 arg2_8 = insnDecoded.arg2;
+	
+	switch (opNum){
 
 		case  1: // 0001 11rd dddd rrrr		ADC Rd,Rr (ROL is ADC Rd,Rd)
-			Rd = r[d = arg1_8];
+			Rd = r[arg1_8];
 			Rr = r[arg2_8];
 			R = Rd + Rr + C;
 			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
 			UPDATE_HC_ADD; UPDATE_SVN_ADD; UPDATE_Z;
-			r[d] = R;
+			r[arg1_8] = R;
 			break;
 
 		case  2: // 0000 11rd dddd rrrr		ADD Rd,Rr (LSL is ADD Rd,Rd)
-			Rd = r[d = arg1_8];
+			Rd = r[arg1_8];
 			Rr = r[arg2_8];
 			R = Rd + Rr;
 			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
 			UPDATE_HC_ADD; UPDATE_SVN_ADD; UPDATE_Z;
-			r[d] = R;
+			r[arg1_8] = R;
 			break;
 
 		case  3: // 1001 0110 KKdd KKKK		ADIW Rd+1:Rd,K   (16-bit add to upper four register pairs)
@@ -1148,28 +1148,28 @@ u8 avr8::exec()
 			break;
 
 		case  4: // 0010 00rd dddd rrrr		AND Rd,Rr (TST is AND Rd,Rd)
-			Rd = r[d = arg1_8];
+			Rd = r[arg1_8];
 			Rr = r[arg2_8];
 			R = Rd & Rr;
 			clr_bits(SREG, SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
 			UPDATE_SVN_LOGICAL; UPDATE_Z;
-			r[d] = R;
+			r[arg1_8] = R;
 			break;
 
 		case  5: // 0111 KKKK dddd KKKK		ANDI Rd,K (CBR is ANDI with K complemented)
-			Rd = r[d = arg1_8];
+			Rd = r[arg1_8];
 			Rr = arg2_8;
 			R = Rd & Rr;
 			clr_bits(SREG, SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
 			UPDATE_SVN_LOGICAL; UPDATE_Z;
-			r[d] = R;
+			r[arg1_8] = R;
 			break;
 
 		case  6: // 1001 010d dddd 0101		ASR Rd
-			Rd = r[d =  arg1_8];
+			Rd = r[arg1_8];
 			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
 			set_bit_1(SREG,SREG_C,Rd&1);
-			r[d] = R = (Rd >> 1) | (Rd & 0x80);
+			r[arg1_8] = R = (Rd >> 1) | (Rd & 0x80);
 			UPDATE_N;
 			set_bit_1(SREG,SREG_V,(R>>7)^(Rd&1));
 			UPDATE_S;
@@ -1187,8 +1187,8 @@ u8 avr8::exec()
 			break;
 
 		case  9: // 1111 01kk kkkk ksss		BRBC s,k (BRCC, etc are aliases for this with sss implicit)
-			sTmp = k7;
-			if (!(SREG & (1<<(insn&7))))
+			sTmp = arg2_8;
+			if (!(SREG & (1<<(arg1_8))))
 			{
 				pc += sTmp;
 				cycles=2;
@@ -1196,8 +1196,8 @@ u8 avr8::exec()
 			break;
 
 		case  10: // 1111 00kk kkkk ksss		BRBS s,k (same here)
-			sTmp = k7;
-			if (SREG & (1<<(insn&7)))
+			sTmp = arg2_8;
+			if (SREG & (1<<(arg1_8)))
 			{
 				pc += sTmp;
 				cycles=2;
@@ -1269,7 +1269,7 @@ u8 avr8::exec()
 			Rr = r[arg2_8];
 			if (Rd == Rr)
 			{
-				uTmp = get_insn_size(progmem[pc]);
+				uTmp = get_insn_size(progmemDecoded[pc].opNum);
 				cycles += uTmp;
 				pc += uTmp;
 			}
@@ -1285,12 +1285,12 @@ u8 avr8::exec()
 			break;
 
 		case  22: // 0010 01rd dddd rrrr		EOR Rd,Rr (CLR is EOR Rd,Rd)
-			Rd = r[d = arg1_8];
+			Rd = r[arg1_8];
 			Rr = r[arg2_8];
 			R = Rd ^ Rr;
 			clr_bits(SREG, SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
 			UPDATE_SVN_LOGICAL; UPDATE_Z;
-			r[d] = R;
+			r[arg1_8] = R;
 			break;
 		
 		case  23: // 0000 0011 0ddd 1rrr		FMUL Rd,Rr (registers are in 16-23 range)
@@ -1442,10 +1442,10 @@ u8 avr8::exec()
 			break;
 
 		case  45: // 1001 010d dddd 0110		LSR Rd
-			Rd = r[d=arg1_8];
+			Rd = r[arg1_8];
 			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
 			set_bit_1(SREG,SREG_C,Rd&1);
-			r[d] = R = (Rd >> 1);
+			r[arg1_8] = R = (Rd >> 1);
 			UPDATE_N;
 			set_bit_1(SREG,SREG_V,Rd&1);
 			UPDATE_S;
@@ -1497,9 +1497,9 @@ u8 avr8::exec()
 			break;
 
 		case  51: // 1001 010d dddd 0001		NEG Rd
-			Rr = r[d=arg1_8];
+			Rr = r[arg1_8];
 			Rd = 0;
-			r[d] = R = Rd - Rr;
+			r[arg1_8] = R = Rd - Rr;
 			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
 			UPDATE_HC_SUB; UPDATE_SVN_SUB; UPDATE_Z;
 			break;
@@ -1508,21 +1508,21 @@ u8 avr8::exec()
 			break;
 
 		case  53: // 0010 10rd dddd rrrr		OR Rd,Rr
-			Rd = r[d = arg1_8];
+			Rd = r[arg1_8];
 			Rr = r[arg2_8];
 			R = Rd | Rr;
 			clr_bits(SREG, SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
 			UPDATE_SVN_LOGICAL; UPDATE_Z;
-			r[d] = R;
+			r[arg1_8] = R;
 			break;
 
 		case  54: // 0110 KKKK dddd KKKK		ORI Rd,K (same as SBR insn)
-			Rd = r[d = arg1_8];
+			Rd = r[arg1_8];
 			Rr = arg2_8;
 			R = Rd | Rr;
 			clr_bits(SREG, SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
 			UPDATE_SVN_LOGICAL; UPDATE_Z;
-			r[d] = R;
+			r[arg1_8] = R;
 			break;
 
 		case  55: // 1011 1AAd dddd AAAA		OUT A,Rd
@@ -1548,7 +1548,7 @@ u8 avr8::exec()
 			DEC_SP;
 			write_sram(SP,pc>>8);
 			DEC_SP;
-			pc += k12;
+			pc += arg2_8;
 			cycles=3;
 			break;
 
@@ -1571,13 +1571,13 @@ u8 avr8::exec()
 			break;
 
 		case  61: // 1100 kkkk kkkk kkkk		RJMP k
-			pc += k12;
+			pc += arg2_8;
 			cycles=2;
 			break;
 
 		case  62: // 1001 010d dddd 0111		ROR Rd
-			Rd = r[d=arg1_8];
-			r[d] = R = (Rd >> 1) | ((SREG&1)<<7);
+			Rd = r[arg1_8];
+			r[arg1_8] = R = (Rd >> 1) | ((SREG&1)<<7);
 			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
 			set_bit_1(SREG,SREG_C,Rd&1);
 			UPDATE_N;
@@ -1587,21 +1587,21 @@ u8 avr8::exec()
 			break;
 
 		case  63: // 0000 10rd dddd rrrr		SBC Rd,Rr
-			Rd = r[d = arg1_8];
+			Rd = r[arg1_8];
 			Rr = r[arg2_8];
 			R = Rd - Rr - C;
 			clr_bits(SREG, SREG_CM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
 			UPDATE_HC_SUB; UPDATE_SVN_SUB; UPDATE_CLEAR_Z;
-			r[d] = R;
+			r[arg1_8] = R;
 			break;
 
 		case  64: // 0100 KKKK dddd KKKK		SBCI Rd,K
-			Rd = r[d = arg1_8];
+			Rd = r[arg1_8];
 			Rr = arg2_8;
 			R = Rd - Rr - C;
 			clr_bits(SREG, SREG_CM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
 			UPDATE_HC_SUB; UPDATE_SVN_SUB; UPDATE_CLEAR_Z;
-			r[d] = R;
+			r[arg1_8] = R;
 			break;
 
 		case  65: // 1001 1010 AAAA Abbb		SBI A,b
@@ -1614,7 +1614,7 @@ u8 avr8::exec()
 			Rd = arg1_8;
 			if (!(read_io(Rd) & (1<<(arg2_8))))
 			{
-				uTmp = get_insn_size(progmem[pc]);
+				uTmp = get_insn_size(progmemDecoded[pc].opNum);
 				cycles += uTmp;
 				pc += uTmp;
 			}
@@ -1624,7 +1624,7 @@ u8 avr8::exec()
 			Rd = arg1_8;
 			if (read_io(Rd) & (1<<(arg2_8)))
 			{
-				uTmp = get_insn_size(progmem[pc]);
+				uTmp = get_insn_size(progmemDecoded[pc].opNum);
 				cycles += uTmp;
 				pc += uTmp;
 			}
@@ -1650,7 +1650,7 @@ u8 avr8::exec()
 			Rd = r[arg1_8];
 			if (((Rd >> (arg2_8)) & 1U) == 0)
 			{
-				uTmp = get_insn_size(progmem[pc]);
+				uTmp = get_insn_size(progmemDecoded[pc].opNum);
 				cycles += uTmp;
 				pc += uTmp;
 			}
@@ -1660,7 +1660,7 @@ u8 avr8::exec()
 			Rd = r[arg1_8];
 			if (((Rd >> (arg2_8)) & 1U) == 1)
 			{
-				uTmp = get_insn_size(progmem[pc]);
+				uTmp = get_insn_size(progmemDecoded[pc].opNum);
 				cycles += uTmp;
 				pc += uTmp;
 			}
@@ -1744,21 +1744,21 @@ u8 avr8::exec()
 			break;
 
 		case  83: // 0001 10rd dddd rrrr		SUB Rd,Rr
-			Rd = r[d = arg1_8];
+			Rd = r[arg1_8];
 			Rr = r[arg2_8];
 			R = Rd - Rr;
 			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
 			UPDATE_HC_SUB; UPDATE_SVN_SUB; UPDATE_Z;
-			r[d] = R;
+			r[arg1_8] = R;
 			break;
 
 		case  84: // 0101 KKKK dddd KKKK		SUBI Rd,K
-			Rd = r[d = arg1_8];
+			Rd = r[arg1_8];
 			Rr = arg2_8;
 			R = Rd - Rr;
 			clr_bits(SREG, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM | SREG_HM);
 			UPDATE_HC_SUB; UPDATE_SVN_SUB; UPDATE_Z;
-			r[d] = R;
+			r[arg1_8] = R;
 			break;
 
 		case  85: // 1001 010d dddd 0010		SWAP Rd

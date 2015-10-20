@@ -1,0 +1,8 @@
+make debug
+=================================
+Building Debug...
+Platform: Windows-Windows_NT
+=================================
+g++ -c uzem.cpp -o Debug/uzem.o -march=core2 -IC:\MinGW\include\SDL2  -DWindows_NT -D_GNU_SOURCE=1 -DGUI=1 -DJOY_ANALOG_DEADZONE=8192  -g  -MD -MP -MF Debug/uzem.d -DUSE_SPI_DEBUG=1 -DUSE_EEPROM_DEBUG=1 -DUSE_GDBSERVER_DEBUG=1
+g++ -c -S uzem.cpp -o Debug/uzem.o.asm -march=core2 -IC:\MinGW\include\SDL2  -DWindows_NT -D_GNU_SOURCE=1 -DGUI=1 -DJOY_ANALOG_DEADZONE=8192  -g  -MD -MP -MF Debug/uzem.d -DUSE_SPI_DEBUG=1 -DUSE_EEPROM_DEBUG=1 -DUSE_GDBSERVER_DEBUG=1
+g++ -c avr8.cpp -o Debug/avr8.o -march=core2 -IC:\MinGW\include\SDL2  -DWindows_NT -D_GNU_SOURCE=1 -DGUI=1 -DJOY_ANALOG_DEADZONE=8192  -g  -MD -MP -MF Debug/avr8.d -DUSE_SPI_DEBUG=1 -DUSE_EEPROM_DEBUG=1 -DUSE_GDBSERVER_DEBUG=1
