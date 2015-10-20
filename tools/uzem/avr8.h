@@ -377,7 +377,7 @@ public:
     bool recordMovie;
 	char romName[256];
 	u16 decodeArg(u16 flash, u16 argMask, u8 argNeg);
-	instructionDecode_t instructionDecode(u16 rawFlash);
+	void instructionDecode(u16 address);
 	void decodeFlash(void);
 	void decodeFlash(u16 address);
 
@@ -612,13 +612,13 @@ private:
 
 	inline static int get_insn_size(u8 insn)
 	{
-		/*	1001 000d dddd 0000		LDS Rd,k (next word is rest of address)
-		1001 001d dddd 0000		STS k,Rr (next word is rest of address)
-		1001 010k kkkk 110k		JMP k (next word is rest of address)
-		1001 010k kkkk 111k		CALL k (next word is rest of address) */
+		/* 41  LDS Rd,k (next word is rest of address)
+		   82  STS k,Rr (next word is rest of address)
+		   30  JMP k (next word is rest of address)
+		   14  CALL k (next word is rest of address) */
 		// This code is simplified by assuming upper k bits are zero on 644
 		
-		if (insn == 14 || insn == 20 || insn == 41 || insn == 82) {
+		if (insn == 14 || insn == 30 || insn == 41 || insn == 82) {
 			return 2;
 		} else {
 			return 1;
