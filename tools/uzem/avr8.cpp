@@ -1064,7 +1064,7 @@ u8 avr8::exec()
 	const s32 arg2_8 = insnDecoded.arg2;
 
 	cycles = 1;				// Most insns run in one cycle, so assume that
-	u32 Rd, Rr, R, CH;
+	u8 Rd, Rr, R, CH;
 	u32 uTmp, Rd16, R16;
 	s32 sTmp;
 
