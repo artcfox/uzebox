@@ -290,10 +290,10 @@ void avr8::spi_calculateClock(){
 
 // Renders a line into a 32 bit output buffer.
 // Performs a shrink by 2
-static inline void render_line(u32* dest, u8 const* src, u32 const* pal)
+static inline void render_line(u32* dest, u8 const* src, unsigned int spos, u32 const* pal)
 {
 	for (unsigned int i = 0; i < VIDEO_DISP_WIDTH; i++)
-		dest[i] = pal[src[i<<1]];
+		dest[i] = pal[src[((i << 1) + spos) & 0x7FFU]];
 }
 
 inline void avr8::write_io(u8 addr,u8 value)
@@ -364,12 +364,13 @@ void avr8::write_io_x(u8 addr,u8 value)
 				if (scanline_count >= 0){
 					render_line(
 						(u32*)((u8*)surface->pixels + scanline_count * surface->pitch),
-						&scanline_buf[left_edge],
+						&scanline_buf[0],
+						left_edge + left_edge_cycle,
 						palette);
 				}
 
 				scanline_count ++;
-				current_cycle = 0U;
+				left_edge_cycle = cycleCounter;
 
 				if (scanline_count == 224)
 				{
@@ -641,6 +642,8 @@ void avr8::write_io_x(u8 addr,u8 value)
 		// TODO: These should also be latched by the Atmel docs, maybe
 		// implement it later.
 		io[addr] = value;
+		TCNT1 += timer1_base - timer1_next;
+		timer1_base = 0U;
 		timer1_next = 0U; // Force timer state recalculation (update_hardware)
 		break;
 
@@ -666,8 +669,9 @@ u8 avr8::read_io(u8 addr)
 	// p106 in 644 manual; 16-bit values are latched
 	if      (addr == ports::TCNT1L)
 	{
-		T16_latch = io[addr + 1U];
-		return io[addr];
+		unsigned int curr_timer = TCNT1 + timer1_base - timer1_next;
+		T16_latch = (curr_timer >> 8) & 0xFFU;
+		return curr_timer & 0xFFU;
 	}
 	else if (addr == ports::TCNT1H)
 	{
@@ -679,7 +683,20 @@ u8 avr8::read_io(u8 addr)
 	}
 }
 
+// Inline variation of update_hardware, to be used with frequent multi-cycle
+// instructions.
+inline void avr8::update_hardware_fast()
+{
+	if (timer1_next == 0U)
+	{
+		update_hardware();
+		return;
+	}
 
+	cycleCounter ++;
+	timer1_next --;
+	scanline_buf[cycleCounter & 0x7FFU] = pixel_raw;
+}
 
 // Performs hardware updates which have to be calculated at cycle precision
 void avr8::update_hardware()
@@ -694,6 +711,9 @@ void avr8::update_hardware()
 
 	if (timer1_next == 0U)
 	{
+		// Apply time elapsed between full timer processings
+
+		TCNT1 += timer1_base;
 
 		// Apply delayed timer interrupt flags
 
@@ -705,7 +725,6 @@ void avr8::update_hardware()
 		if ((TCCR1B & 7U) != 0U) // If timer 1 is started
 		{
 
-			unsigned int TCNT1 = TCNT1L | ((unsigned int)(TCNT1H) << 8);
 			unsigned int OCR1A = OCR1AL | ((unsigned int)(OCR1AH) << 8);
 			unsigned int OCR1B = OCR1BL | ((unsigned int)(OCR1BH) << 8);
 
@@ -766,45 +785,22 @@ void avr8::update_hardware()
 
 			}
 
-			TCNT1L = (u8) TCNT1;
-			TCNT1H = (u8) (TCNT1>>8);
-
 		}
+
+		// Set timer base to be able to reproduce TCNT1 outside full timer
+		// processing
+
+		timer1_base = timer1_next;
 
 	}
 	else
 	{
 		timer1_next --;
-		// Note: A little hack is here, by C / C++ standard a logical
-		// operation's result is 0 for false, 1 for true when
-		// converted to integer. This can be optimized well by a sane
-		// compiler.
-		TCNT1L ++;
-		TCNT1H += (unsigned int)(TCNT1L == 0U);
-	}
-
-	// Apply delayed outputs
-
-	if (dly_out != 0U)
-	{
-		if ((dly_out & DLY_TCCR1B) != 0U)
-		{
-			TCCR1B = dly_TCCR1B;
-			timer1_next = 0U; // Timer state changes
-		}
-		if ((dly_out & DLY_TCNT1) != 0U)
-		{
-			TCNT1L = dly_TCNT1L;
-			TCNT1H = dly_TCNT1H;
-			timer1_next = 0U; // Timer state changes
-		}
-		dly_out = 0U;
 	}
 
 	// Draw pixel on scanline
 
-	scanline_buf[current_cycle & 0x7FFU] = pixel_raw;
-	current_cycle ++;
+	scanline_buf[cycleCounter & 0x7FFU] = pixel_raw;
 }
 
 
@@ -813,6 +809,32 @@ void avr8::update_hardware()
 // Also process interrupt requests
 inline void avr8::update_hardware_ins()
 {
+	// Apply delayed outputs
+	//
+	// Notes: This can be here since as of now, it looks like all
+	// instructions writing IO registers perform that in their last
+	// cycle, so a delayed output may only be produced then, that is,
+	// after the instruction. If this doesn't hold up, this will have
+	// to be placed in the update_hardware call.
+
+	if (dly_out != 0U)
+	{
+		if ((dly_out & DLY_TCCR1B) != 0U)
+		{
+			TCCR1B = dly_TCCR1B;
+			TCNT1 += timer1_base - timer1_next;
+			timer1_base = 0U;
+			timer1_next = 0U; // Timer state changes
+		}
+		if ((dly_out & DLY_TCNT1) != 0U)
+		{
+			TCNT1 = (dly_TCNT1H << 8) | dly_TCNT1L;
+			timer1_base = 0U;
+			timer1_next = 0U; // Timer state changes
+		}
+		dly_out = 0U;
+	}
+
 	// Get cycle count to emulate
 
 	unsigned int cycles = cycleCounter - cycle_ctr_ins;
@@ -1143,7 +1165,7 @@ unsigned int avr8::exec()
 			UPDATE_S;
 			set_bit_inv(SREG,SREG_Z,R16);
 			set_bit_1(SREG,SREG_C,((~R16&Rd16)&0x8000) >> 15);
-			update_hardware();
+			update_hardware_fast();
 			break;
 
 		case  4: // 0010 00rd dddd rrrr		(1) AND Rd,Rr (TST is AND Rd,Rd)
@@ -1188,7 +1210,7 @@ unsigned int avr8::exec()
 		case  9: // 1111 01kk kkkk ksss		(1/2) BRBC s,k (BRCC, etc are aliases for this with sss implicit)
 			if (!(SREG & (1<<(arg1_8))))
 			{
-				update_hardware();
+				update_hardware_fast();
 				pc += arg2_8;
 			}
 			break;
@@ -1196,7 +1218,7 @@ unsigned int avr8::exec()
 		case  10: // 1111 00kk kkkk ksss		(1/2) BRBS s,k (same here)
 			if (SREG & (1<<(arg1_8)))
 			{
-				update_hardware();
+				update_hardware_fast();
 				pc += arg2_8;
 			}
 			break;
@@ -1217,9 +1239,9 @@ unsigned int avr8::exec()
 
 		case  14: // 1001 010k kkkk 111k		(4) CALL k (next word is rest of address)
 			// Note: 64K progmem, so 'k' in first insn word is unused
-			update_hardware();
-			update_hardware();
-			update_hardware();
+			update_hardware_fast();
+			update_hardware_fast();
+			update_hardware_fast();
 			write_sram(SP,(pc+1));
 			DEC_SP;
 			write_sram(SP,(pc+1)>>8);
@@ -1228,7 +1250,7 @@ unsigned int avr8::exec()
 			break;
 
 		case  15: // 1001 1000 AAAA Abbb		(2) CBI A,b
-			update_hardware();
+			update_hardware_fast();
 			Rd = arg1_8;
 			write_io(Rd, read_io(Rd) & ~(1<<(arg2_8)));
 			break;
@@ -1272,7 +1294,7 @@ unsigned int avr8::exec()
 				pc += icc;
 				while (icc != 0U)
 				{
-					update_hardware();
+					update_hardware_fast();
 					icc --;
 				}
 			}
@@ -1304,7 +1326,7 @@ unsigned int avr8::exec()
 			r1 = (u8)(uTmp >> 7);
 			clr_bits(SREG, SREG_CM | SREG_ZM);
 			UPDATE_CZ_MUL(uTmp);
-			update_hardware();
+			update_hardware_fast();
 			break;
 
 		case  24: // 0000 0011 1ddd 0rrr		(2) FMULS Rd,Rr
@@ -1315,7 +1337,7 @@ unsigned int avr8::exec()
 			r1 = (u8)(sTmp >> 7);
 			clr_bits(SREG, SREG_CM | SREG_ZM);
 			UPDATE_CZ_MUL(sTmp);
-			update_hardware();
+			update_hardware_fast();
 			break;
 
 		case  25: // 0000 0011 1ddd 1rrr		(2) FMULSU Rd,Rr
@@ -1326,12 +1348,12 @@ unsigned int avr8::exec()
 			r1 = (u8)(sTmp >> 7);
 			clr_bits(SREG, SREG_CM | SREG_ZM);
 			UPDATE_CZ_MUL(sTmp);
-			update_hardware();
+			update_hardware_fast();
 			break;
 
 		case  26: // 1001 0101 0000 1001		(3) ICALL (call thru Z register)
-			update_hardware();
-			update_hardware();
+			update_hardware_fast();
+			update_hardware_fast();
 			write_sram(SP,u8(pc));
 			DEC_SP;
 			write_sram(SP,(pc)>>8);
@@ -1340,7 +1362,7 @@ unsigned int avr8::exec()
 			break;
 
 		case  27: // 1001 0100 0000 1001		(2) IJMP (jump thru Z register)
-			update_hardware();
+			update_hardware_fast();
 			pc = Z;
 			break;
 
@@ -1361,61 +1383,61 @@ unsigned int avr8::exec()
 
 		case  30: // 1001 010k kkkk 110k		(3) JMP k (next word is rest of address)
 			// Note: 64K progmem, so 'k' in first insn word is unused
-			update_hardware();
-			update_hardware();
+			update_hardware_fast();
+			update_hardware_fast();
 			pc = arg2_8;
 			break;
 
 		case  31: // 1001 000d dddd 1110		(2) LD rd,-X
-			update_hardware();
+			update_hardware_fast();
 			DEC_X;
 			r[arg1_8] = read_sram_io(X);
 			break;
 
 		case  32: // 1001 000d dddd 1010		(2) LD Rd,-Y
-			update_hardware();
+			update_hardware_fast();
 			DEC_Y;
 			r[arg1_8] = read_sram_io(Y);
 			break;
 
 		case  33: // 1001 000d dddd 0010		(2) LD Rd,-Z
-			update_hardware();
+			update_hardware_fast();
 			DEC_Z;
 			r[arg1_8] = read_sram_io(Z);
 			break;
 
 		case  34: // 1001 000d dddd 1100		(2) LD rd,X
-			update_hardware();
+			update_hardware_fast();
 			r[arg1_8] = read_sram_io(X);
 			break;
 
 		case  35: // 1001 000d dddd 1101		(2) LD rd,X+
-			update_hardware();
+			update_hardware_fast();
 			r[arg1_8] = read_sram_io(X);
 			INC_X;
 			break;
 
 		case  36: // 1001 000d dddd 1001		(2) LD Rd,Y+
-			update_hardware();
+			update_hardware_fast();
 			r[arg1_8] = read_sram_io(Y);
 			INC_Y;
 			break;
 
 		case  37: // 10q0 qq0d dddd 1qqq		(2) LDD Rd,Y+q
-			update_hardware();
+			update_hardware_fast();
 			Rd = arg1_8;
 			Rr = arg2_8;
 			r[Rd] = read_sram_io(Y + Rr);
 			break;
 
 		case  38: // 1001 000d dddd 0001		(2) LD Rd,Z+
-			update_hardware();
+			update_hardware_fast();
 			r[arg1_8] = read_sram_io(Z);
 			INC_Z;
 			break;
 
 		case  39: // 10q0 qq0d dddd 0qqq		(2) LDD Rd,Z+q
-			update_hardware();
+			update_hardware_fast();
 			Rd = arg1_8;
 			Rr = arg2_8;
 			r[Rd] = read_sram_io(Z + Rr);
@@ -1426,26 +1448,26 @@ unsigned int avr8::exec()
 			break;
 
 		case  41: // 1001 000d dddd 0000		(2) LDS Rd,k (next word is rest of address)
-			update_hardware();
+			update_hardware_fast();
 			r[arg1_8] = read_sram_io(arg2_8);
 			pc++;
 			break;
 
 		case  42: // 1001 0101 1100 1000		(3) LPM (r0 implied, why is this special?)
-			update_hardware();
-			update_hardware();
+			update_hardware_fast();
+			update_hardware_fast();
 			r0 = read_progmem(Z);
 			break;
 
 		case  43: // 1001 000d dddd 0100		(3) LPM Rd,Z
-			update_hardware();
-			update_hardware();
+			update_hardware_fast();
+			update_hardware_fast();
 			r[arg1_8] = read_progmem(Z);
 			break;
 
 		case  44: // 1001 000d dddd 0101		(3) LPM Rd,Z+
-			update_hardware();
-			update_hardware();
+			update_hardware_fast();
+			update_hardware_fast();
 			r[arg1_8] = read_progmem(Z);
 			INC_Z;
 			break;
@@ -1480,7 +1502,7 @@ unsigned int avr8::exec()
 			r1 = (u8)(uTmp >> 8);
 			clr_bits(SREG, SREG_CM | SREG_ZM);
 			UPDATE_CZ_MUL(uTmp);
-			update_hardware();
+			update_hardware_fast();
 			break;
 
 		case  49: // 0000 0010 dddd rrrr		(2) MULS Rd,Rr
@@ -1491,7 +1513,7 @@ unsigned int avr8::exec()
 			r1 = (u8)(sTmp >> 8);
 			clr_bits(SREG, SREG_CM | SREG_ZM);
 			UPDATE_CZ_MUL(sTmp);
-			update_hardware();
+			update_hardware_fast();
 			break;
 
 		case  50: // 0000 0011 0ddd 0rrr		(2) MULSU Rd,Rr (registers are in 16-23 range)
@@ -1502,7 +1524,7 @@ unsigned int avr8::exec()
 			r1 = (u8)(sTmp >> 8);
 			clr_bits(SREG, SREG_CM | SREG_ZM);
 			UPDATE_CZ_MUL(sTmp);
-			update_hardware();
+			update_hardware_fast();
 			break;
 
 		case  51: // 1001 010d dddd 0001		(1) NEG Rd
@@ -1541,20 +1563,20 @@ unsigned int avr8::exec()
 			break;
 
 		case  56: // 1001 000d dddd 1111		(2) POP Rd
-			update_hardware();
+			update_hardware_fast();
 			INC_SP;
 			r[arg1_8] = read_sram(SP);
 			break;
 
 		case  57: // 1001 001d dddd 1111		(2) PUSH Rd
-			update_hardware();
+			update_hardware_fast();
 			write_sram(SP,r[arg1_8]);
 			DEC_SP;
 			break;
 
 		case  58: // 1101 kkkk kkkk kkkk		(3) RCALL k
-			update_hardware();
-			update_hardware();
+			update_hardware_fast();
+			update_hardware_fast();
 			write_sram(SP,(u8)pc);
 			DEC_SP;
 			write_sram(SP,pc>>8);
@@ -1563,9 +1585,9 @@ unsigned int avr8::exec()
 			break;
 
 		case  59: // 1001 0101 0000 1000		(4) RET
-			update_hardware();
-			update_hardware();
-			update_hardware();
+			update_hardware_fast();
+			update_hardware_fast();
+			update_hardware_fast();
 			INC_SP;
 			pc = read_sram(SP) << 8;
 			INC_SP;
@@ -1573,9 +1595,9 @@ unsigned int avr8::exec()
 			break;
 
 		case  60: // 1001 0101 0001 1000		(4) RETI
-			update_hardware();
-			update_hardware();
-			update_hardware();
+			update_hardware_fast();
+			update_hardware_fast();
+			update_hardware_fast();
 			INC_SP;
 			pc = read_sram(SP) << 8;
 			INC_SP;
@@ -1585,7 +1607,7 @@ unsigned int avr8::exec()
 			break;
 
 		case  61: // 1100 kkkk kkkk kkkk		(2) RJMP k
-			update_hardware();
+			update_hardware_fast();
 			pc += arg2_8;
 			break;
 
@@ -1619,7 +1641,7 @@ unsigned int avr8::exec()
 			break;
 
 		case  65: // 1001 1010 AAAA Abbb		(2) SBI A,b
-			update_hardware();
+			update_hardware_fast();
 			Rd = arg1_8;
 			write_io(Rd, read_io(Rd) | (1<<(arg2_8)));
 			break;
@@ -1632,7 +1654,7 @@ unsigned int avr8::exec()
 				pc += icc;
 				while (icc != 0U)
 				{
-					update_hardware();
+					update_hardware_fast();
 					icc --;
 				}
 			}
@@ -1646,7 +1668,7 @@ unsigned int avr8::exec()
 				pc += icc;
 				while (icc != 0U)
 				{
-					update_hardware();
+					update_hardware_fast();
 					icc --;
 				}
 			}
@@ -1665,7 +1687,7 @@ unsigned int avr8::exec()
 			UPDATE_S;
 			set_bit_inv(SREG,SREG_Z,R16);
 			set_bit_1(SREG,SREG_C,((R16&~Rd16)&0x8000) >> 15);
-			update_hardware();
+			update_hardware_fast();
 			break;
 
 		case  69: // 1111 110r rrrr 0bbb		(1/2/3) SBRC Rr,b
@@ -1676,7 +1698,7 @@ unsigned int avr8::exec()
 				pc += icc;
 				while (icc != 0U)
 				{
-					update_hardware();
+					update_hardware_fast();
 					icc --;
 				}
 			}
@@ -1690,7 +1712,7 @@ unsigned int avr8::exec()
 				pc += icc;
 				while (icc != 0U)
 				{
-					update_hardware();
+					update_hardware_fast();
 					icc --;
 				}
 			}
@@ -1702,9 +1724,9 @@ unsigned int avr8::exec()
 			break;
 
 		case  72: // 1001 0101 1110 1000		(?) SPM Z (writes R1:R0)
-			update_hardware();
-			update_hardware(); // Cycle count undocumented?!?!?
-			update_hardware(); // (4 cycles emulated)
+			update_hardware_fast();
+			update_hardware_fast(); // Cycle count undocumented?!?!?
+			update_hardware_fast(); // (4 cycles emulated)
 			if (Z >= progSize/2)
 			{
 				fprintf(stderr,"illegal write to progmem addr %x\n",Z);
@@ -1717,36 +1739,36 @@ unsigned int avr8::exec()
 			break;
 
 		case  73: // 1001 001r rrrr 1110		(2) ST -X,Rr
-			update_hardware();
+			update_hardware_fast();
 			DEC_X;
 			write_sram_io(X,r[arg1_8]);
 			break;
 
 		case  74: // 1001 001r rrrr 1010		(2) ST -Y,Rr
-			update_hardware();
+			update_hardware_fast();
 			DEC_Y;
 			write_sram_io(Y,r[arg1_8]);
 			break;
 
 		case  75: // 1001 001r rrrr 0010		(2) ST -Z,Rr
-			update_hardware();
+			update_hardware_fast();
 			DEC_Z;
 			write_sram_io(Z,r[arg1_8]);
 			break;
 
 		case  76: // 1001 001r rrrr 1100		(2) ST X,Rr
-			update_hardware();
+			update_hardware_fast();
 			write_sram_io(X,r[arg1_8]);
 			break;
 
 		case  77: // 1001 001r rrrr 1101		(2) ST X+,Rr
-			update_hardware();
+			update_hardware_fast();
 			write_sram_io(X,r[arg1_8]);
 			INC_X;
 			break;
 
 		case  78: // 1001 001r rrrr 1001		(2) ST Y+,Rr
-			update_hardware();
+			update_hardware_fast();
 			write_sram_io(Y,r[arg1_8]);
 			INC_Y;
 			break;
@@ -1754,12 +1776,12 @@ unsigned int avr8::exec()
 		case  79: // 10q0 qq1d dddd 1qqq		(2) STD Y+q,Rd
 			Rd = arg1_8;
 			Rr = arg2_8;
-			update_hardware();
+			update_hardware_fast();
 			write_sram_io(Y + Rr, r[Rd]);
 			break;
 
 		case  80: // 1001 001r rrrr 0001		(2) ST Z+,Rr
-			update_hardware();
+			update_hardware_fast();
 			write_sram_io(Z,r[arg1_8]);
 			INC_Z;
 			break;
@@ -1767,12 +1789,12 @@ unsigned int avr8::exec()
 		case  81: // 10q0 qq1d dddd 0qqq		(2) STD Z+q,Rd
 			Rd = arg1_8;
 			Rr = arg2_8;
-			update_hardware();
+			update_hardware_fast();
 			write_sram_io(Z + Rr, r[Rd]);
 			break;
 
 		case  82: // 1001 001d dddd 0000		(2) STS k,Rr (next word is rest of address)
-			update_hardware();
+			update_hardware_fast();
 			write_sram_io(arg2_8,r[arg1_8]);
 			pc++;
 			break;
@@ -1819,7 +1841,7 @@ unsigned int avr8::exec()
 
 	// Process hardware for the last instruction cycle
 
-	update_hardware();
+	update_hardware_fast();
 
 	// Run instruction precise emulation tasks
 
@@ -1931,9 +1953,9 @@ void avr8::trigger_interrupt(unsigned int location)
 		// Note  that there is an error in the Atmega644 datasheet where
 		// it specifies the IRQ cycles as 5.
 		// see: http://www.avrfreaks.net/forum/interrupt-timing-conundrum
-		update_hardware();
-		update_hardware();
-		update_hardware();
+		update_hardware_fast();
+		update_hardware_fast();
+		update_hardware_fast();
 
 }
 
@@ -2030,7 +2052,7 @@ bool avr8::init_gui()
 			SDL_PauseAudio(0);
 	}
 
-	current_cycle = 0U;
+	left_edge_cycle = cycleCounter;
 	scanline_top = -33-5;
 	scanline_count = -999;
 	//Syncronized with the kernel, this value now results in the image 
